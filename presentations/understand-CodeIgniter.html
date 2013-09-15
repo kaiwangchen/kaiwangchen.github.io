@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Title</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <style type="text/css">
+      /* Slideshow styles */
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Understand CodeIgniter
+
+kaiwang.chen at gmail.com
+
+Sep 18, 2013
+
+---
+
+## Agenda
+
+- Why ...
+- Web application 101
+
+- CodeIgniter-2.1.4 source code annotation
+
+  - application flow
+  - class loading
+  - routing
+  - rendering outputs
+  - driver libraries
+  - library summary
+  - profiling
+  - security concerns
+  - erorr handling
+
+- Problems, cautions, and future
+
+---
+
+## Why ...
+
+### web application framework
+
+focus on the projects by minimizing the amount of code needed for a given task
+
+### CodeIgniter
+
+1. simple and thoroughly documented
+2. fast
+3. full-range of libraries
+4. extensible
+5. built-in profiling
+
+---
+
+class: center, middle
+
+## Web application 101
+
+---
+
+## Web interaction
+
+                 1. request
+    +--------+ ------------> +--------+
+    | client |               | server |
+    +--------+ <------------ +--------+
+                 2. response
+
+1. HTTP request
+
+       GET / HTTP/1.1
+       User-Agent: curl/7.19.7
+       Host: localhost
+       Accept: */*
+The first line is known as request line, mainly specifying target resource, '/' in this case.
+
+2. HTTP response
+
+       HTTP/1.1 200 OK
+       Server: nginx/1.0.15
+       Date: Mon, 09 Sep 2013 12:07:57 GMT
+       Content-Type: text/html
+       Transfer-Encoding: chunked
+       Connection: keep-alive
+       X-Powered-By: PHP/5.3.3
+       
+       It works.
+
+---
+
+## Web application container
+
+In-process application server (eg. mod_php)
+
+                  +------------------------------+
+                  | web server                   |
+                  |                              |
+    client <----> |    + - - - - - - - - - - - + |
+                  |    | application container | |
+                  |    + - - - - - - - - - - - + |
+                  +------------------------------+
+
+Standalone application server (eg. php-fpm)
+
+
+                  +------------+  non-HTTP   +-----------------------+
+    client <----> | web server | <- - - - -> | application container |
+                  +------------+             +-----------------------+
+
+_The appliation containers provide execution environment for application frameworks or bare applications._
+
+---
+
+## CGI-style Web application context, <code>$\_SERVER</code>
+
+        [USER] => kc
+        [HOME] => /home/kc
+        [FCGI_ROLE] => RESPONDER
+        [SCRIPT_FILENAME] => /home/kc/repo/CodeIgniter/index.php
+        [QUERY_STRING] => 
+        [REQUEST_METHOD] => GET
+        [CONTENT_TYPE] => 
+        [CONTENT_LENGTH] => 
+        [SCRIPT_NAME] => /index.php
+        [REQUEST_URI] => /
+        [DOCUMENT_URI] => /index.php
+        [DOCUMENT_ROOT] => /home/kc/repo/CodeIgniter
+        [SERVER_PROTOCOL] => HTTP/1.1
+        [GATEWAY_INTERFACE] => CGI/1.1
+        [SERVER_SOFTWARE] => nginx/1.0.15
+        [REMOTE_ADDR] => 127.0.0.1
+        [REMOTE_PORT] => 40293
+        [SERVER_ADDR] => 127.0.0.1
+        [SERVER_PORT] => 80
+        [SERVER_NAME] => _
+        [REDIRECT_STATUS] => 200
+        [HTTP_USER_AGENT] => curl/7.19.7
+        [HTTP_HOST] => localhost
+        [HTTP_ACCEPT] => */*
+        [PHP_SELF] => /index.php
+        [REQUEST_TIME] => 1378730689
+
+_The PHP interpreter changes to the containing directory before executing primary script._
+
+---
+
+## Web application fundamentals
+
+1. finds a handler for the request, a.k.a. routing
+       $ curl http://localhost/index.php/hello/index
+
+   Tips: CodeIgniter segmented URI routing
+
+       http://example.com/index.php/controller/method
+       http://example.com/controller/method
+       http://example.com/controller
+       http://example.com
+
+2. initializes the handler and resources
+3. the handler processes the request and generates response
+
+       <?php # CI-2.1.4 application/controllers/hello.php
+     
+       class Hello extends CI_Controller {
+         function index () {
+           $this->output->set_output('It works');
+         }
+       }
+
+4. the response is sent to the client
+
+_Web application developers focus on implementing the handlers; framework developers provide the wrapping flow._
+
+---
+
+class: center, middle
+
+## CodeIgniter-2.1.4 source code annotation
+
+---
+
+## CodeIgniter application flow chart
+
+![Default-aligned image](appflowchart.gif)
+
+
+1. The index.php serves as the front controller, initializing the base resources needed to run CodeIgniter.
+2. The Router examines the HTTP request to determine what should be done with it.
+3. If a cache file exists, it is sent directly to the browser, bypassing the normal system execution.
+4. Security. Before the application controller is loaded, the HTTP request and any user submitted data is filtered for security.
+5. The Controller loads the model, core libraries, helpers, and any other resources needed to process the specific request.
+6. The finalized View is rendered then sent to the web browser to be seen. If caching is enabled, the view is cached first so that on subsequent requests it can be served.
+
+---
+
+## CodeIgniter source code layout
+
+Everyone should get farmiliar with _General Style and Syntax_ from _CodeIgniter user guide_.
+
+    CodeIgniter-2.1.4
+    |-- index.php                            system
+    |-- system                               |-- core
+    |   |-- core                             |   |-- Benchmark.php
+    |   |-- database                         |   |-- CodeIgniter.php
+    |   |-- fonts                            |   |-- Common.php
+    |   |-- helpers                          |   |-- Config.php
+    |   |-- language                         |   |-- Controller.php
+    |   `-- libraries                        |   |-- Exceptions.php
+    `-- application                          |   |-- Hooks.php
+        |-- cache                            |   |-- Input.php
+        |-- config                           |   |-- Lang.php
+        |   `-- *.php                        |   |-- Loader.php
+        |-- controllers                      |   |-- Model.php
+        |   `-- welcome.php                  |   |-- Output.php
+        |-- core                             |   |-- Router.php
+        |-- errors                           |   |-- Security.php
+        |   `-- error_*.php                  |   |-- URI.php
+        |-- helpers                          |   `-- Utf8.php
+        |-- hooks                            |-- database
+        |-- language                         |   |-- DB.php
+        |-- libraries                        |   |-- DB_active_rec.php
+        |-- logs                             |   |-- DB_cache.php
+        |-- models                           |   |-- DB_driver.php
+        |-- third_party                      |   |-- DB_result.php
+        `-- views                            :   |-- DB_utility.php
+            `-- welcome_message.php          :    `-- drivers            
+
+---
+
+## The framework bootstrap and service flow
+
+### <code>index.php</code>
+
+1. sets error reporting by <code>ENVIRONMENT</code>
+2. for CLI requests, changes into containing directory
+3. initializes path constants, namely system and application
+4. <code>system/core/CodeIgniter.php</code>
+
+### <code>system/core/CodeIgniter.php</code>
+
+1. imports common core functions, namely <code>load\_class</code>, <code>get\_config</code> and <code>config\_item</code>, 
+   and <code>ENVIRONMENT</code>-specific constants <code>application/config/(ENVIRONMENT)/constants.php</code>
+2. sets exception handler
+3. instantiates essential components[1] as globals, set routing[2] and try serving from page cache
+4. requires <code>system/core/Controller.php</code>, <code>application/core/MY_Controller.php</code>[3] and <code>application/controllers/(optional directory/)(controller).php</code>
+5. the controller method should not be private[4], otherwise requires <code>application/cotrollers/(404\_override).php</code>
+6. initialize the application controller
+7. if defined <code>controller->\_remap</code>, calls it, otherwise the controller method, or fall back to 404\_override controller
+8. calls, if defined, <code>display\_override</code> hook, or fall back to rendering to the brower by <code>$OUT->\_display()</code>
+
+[1] Benchmark Hooks Config Utf8 URI Router Output Security Input Lang;
+[2] routing determines the optional directory, the application controller and which method to call;
+[3] MY_ is the default subclass_prefix;
+[4] private methods start with underscore by convention;
+
+_Normally the application code plays its role in step 7 as controller method._
+
+---
+
+## Hook Points
+
+To tap into and modify the inner workings of the framework _without hacking the core files_.
+
+- pre_system
+- pre_controller
+- post_controller_constructor
+- post_controller
+- display_override
+- cache_override
+- post_system
+
+Hooks are enabled by <code>$config['enable_hooks']</code>, and registered under <code>$hook[point]</code> with <code>filepath</code>,
+<code>filename</code>, <code>class</code>, <code>function</code> and <code>params</code>. Each point can register many hooks.
+
+---
+
+## The tale of two loaders
+
+### <code>system/core/Common.php: load\_class</code>
+
+Used by the framework to load classes, aware of extensions.
+
+1. look for the class [1] first in the local application folder, if not found then in the native system folder
+2. if there is an extension as <code>application/(directory)/(subclass_prefix)(class).php</code>, we load it too
+3. keeps track of the loaded class
+4. creates a new instance
+
+[1] The framework prepends <code>CI\_</code> to get the real class name, while the file name is not prefixed, however, the extension feature in step 2 requires both  prefixed.
+
+_CodeIgniter features replacing (exact filename in step 1) and extending (with subclass_prefix in step 2) nearly any core class, leaving one without any reason to pollute framework code._
+
+### <code>system/core/Loader.php</code>
+
+- available as <code>$this->load</code> in application controllers to explicitly load config, libraries, helpers, model, views, language, etc into the controller instance as members
+- instantiated by <code>load_class</code> in <code>CI_Controller::__construct</code>
+- on instantiation performs autoloading specified by <code>application/config/(ENVIRONMENT)/autoload.php</code>
+
+---
+
+## Magic accessors for application coding
+
+### <code>system/core/Controller.php:__construct</code>
+
+- all components instantiated by <code>load\_class</code> in framework code are available as controller members
+- all components instantiated by <code>$this->load</code> in application code are available as controller members
+
+_Any application controller must inherit from <code>CI\_Controller</code>, otherwise misses the dynamic load feature._
+
+### <code>system/core/Model.php:__construct</code>
+
+- instantiated on demand by <code>$this->load->model()</code>
+- all loaded components are also available as model members
+
+_Any application model must inherit from <code>CI_Model</code>, otherwise does not have the convenience._
+
+---
+
+## Which application controller and method to invoke
+
+<code>CodeIngiter.php</code> calls <code>$RTR->\_set\_routing()</code> to perform route decisions.
+
+URI protocol is chosen with <code>$config['uri\_protocol']</code>, which defaults to <code>AUTO</code> besides explicit options
+<code>REQUEST\_URI</code>, <code>QUERY\_STRING</code>, <code>ORIG\_PATH\_INFO</code>, and <code>PATH\_INFO</code>.
+
+### <code>system/core/Router.php: _set_routing</code>
+
+1. loads custom routes from config <code>routes.php</code>
+2. if <code>$config['enable\_query\_strings']</code> then segments = ( directory_trigger, controller_trigger, function_trigger )
+       http://example.com/index.php?c=controller&m=method
+       http://example.com/?c=controller&m=method
+3. else uses segmented URLs with custom routing override
+       http://example.com/index.php/controller/method
+       http://example.com/controller/method
+       http://example.com/controller
+      <code>system/core/URI.php: \_fetch\_uri\_string</code> uses explicit protocol or tries in turn:
+      <code>argv</code> in cli mode, <code>REQUEST\_URI</code>, <code>PATH\_INFO</code>, <code>QUERY\_STRING</code> or <code>key($\_GET)</code>.
+      With <code>REQUEST\_URI</code> protocol, <code>\_detect\_uri</code> is called to extract URI, 
+      fix the query string and the <code>$\_GET</code> global, and in the meanwhile _<code>SCRIPT\_NAME</code> is stripped from the uri_ when possible. 
+4. calls <code>_set_request</code> to set results as (directory, controller, method) or (controller, method), whose source files are
+   <code>controllers/(directory)/(controller).php</code> and <code>controllers/(controller).php</code>, respectively
+
+
+---
+
+## Rendering outputs
+
+<code>CodeIgniter.php</code> invokes <code>$OUT->\_display()</code> to render to the browsers, if not overridden by <code>display\_override</code> and <code>cache\_override</code> hooks.
+
+### system/core/Output.php:\_display()
+
+1. output is either <code>final\_output</code> or explicitly passed in
+2. _controller method <code>\_output()</code> can be defined to capture output_ and bypass built-in page cache
+3. collects total execution time and memory usage
+4. enables gzip if client supports, as in <code>HTTP\_ACCEPT\_ENCODING</code>
+5. sends response headers
+6. if it is a page cache hit determined by <code>\_display\_cache</code> right after routing in <code>CodeIgniter.php</code>, serves the hit;
+   otherwise optionally inject profile data then does output, be it <code>\_output()</code> or simply sending response body
+
+#### output capturing with <code>\_output</code>
+
+    class Hello extends CI_Controller {
+        function index () { }
+        function _output () { echo 'It works'; }
+    }
+
+#### directly sets <code>$OUT->final\_output</code>
+
+    class Hello extends CI_Controller {
+        function index () { $this->output->set_output('It works') }
+    }
+
+---
+
+## Rendering outputs, cont.
+
+### concatenates views
+
+    class Hello extends CI_Controller {
+        function index () {
+            $this->load->view("hello");
+            $this->load->view("world");
+        }
+    }
+
+#### <code>$this->load->view(view, vars)</code>
+
+Views are simply html snippets mixed with native php code, cancatentated as the final response body.
+
+1. save <code>view</code> and <code>vars</code> as variable variables
+2. determines view file path as <code>appliation/views/(view).php</code>
+3. calls <code>extract()</code> to import variables into the current symbol table from <code>vars</code> and those by <code>$this->load->vars()</code>
+4. loads the <code>(view).php</code> and buffers output
+5. sends to the browser by default, or instead appends to <code>final_output</code>
+
+---
+
+## The magic of driver libraries
+
+Drivers are a special type of Library that has an frontend class and any number of potential backend classes. The frontend class must inherit from <code>CI\_Driver\_Library</code>,
+and backend classes from <code>CI\_Driver</code>. The frontend are referred to as _parent_ in the official document, and backends as _children_, however, it is not PHP native inheritance
+at all, but a _decoration relationship_ where a child delegates to its parent the access to non-existent property or methods. The frontend adapts access to a chosen backend.
+
+The frontend is supposed to trigger the <code>\_\_get</code> magic method defined in <code>CI\_Driver\_Library</code> with the name of the chosen backend, typically by 
+reading for the first time from the chosen backend as a non-existant property. The frontend class may provide its own <code>\_\_get</code> magic method 
+to call <code>is\_support()</code> which does necessary initialization, provided that the overridden <code>\_\_get</code> calls <code>parent::\_\_get</code> first.
+
+### <code>CI\_Driver\_Library:: \_\_get</code>
+
+This magic method is supposed to be called as <code>$frontend->\_\_get(backend\_name)</code>.
+
+1. the library name <code>lib\_name</code> by default resolves to the frontend class name, because it is called on the frontend instance
+2. the backend class is <code>(lib\_name)_(backend\_name)</code>
+3. the frontend class should define <code>valid\_drivers</code> property to validate the requested backend
+4. searches library paths for <code>libraries/(lib\_name)/drivers/(backend\_class).php</code>, the filename can be capitalized or lowercase
+5. loads the backend class, creates an instance, decorates it as frontend's child, and injects the instance as the property so that later access to backend presents no magic
+6. the instance is returned to the caller
+
+The driver library frontend class also defines abstract methods that backends must implement.
+
+_Looks like the complexity only applies to the caching driver._
+
+---
+
+## Loading drivers and libraries
+
+### <code>system/core/Loader.php: driver</code>
+
+1. loads <code>CI\_Driver\_Library</code> from <code>system/libraries/Driver.php</code>
+2. short name <code>(driver)</code> gets expanded as <code>(Driver)/(driver)</code> where directory is always capitalized
+3. loads library <code>(Dirver)/(driver)</code> and gets an instance
+
+### <code>system/core/Loader.php: \_ci\_load\_class</code>
+
+This is the true loader for libraries, given a library name:
+
+1. extracts directory and class names, the file name may be either capitalized or lowercased
+2. it may be an extension in <code>application/libraries/(directory)/(subclass_prefix)(class).php</code>, whose base class is in <code>system/libraries/(class).php</code>, 
+   then loads base class and extension class, and intantiates the extension by <code>\_ci\_init_class</code>
+3. it may be a regular library, then searchs in library paths for <code>libraries/(directory)/(class).php</code> to load and instantiate by <code>\_ci\_init_class</code>. 
+   The library search paths are in order added package paths, <code>application</code>, and <code>system</code>
+
+#### <code>\_ci\_init\_class()</code>
+
+1. if no settings passed in, tries <code>config/(ENVIRONMENT)/(class).php</code>
+2. the class may be explicitly prefixed, or get implicitly prefixed with <code>CI\_</code> or <code>(subclass\_prefix)</code>, or not prefixed.
+3. creates an instance and injects into the controller as a member. If it is a driver library, it instantiates with the library's frontend class
+
+Adding a package simply prepends search paths for libraries, models, helpers, views and configs; removing does the reverse.
+
+---
+
+## <code>$this->load->database()</code>
+
+1. <code>system/database/DB.php</code>
+2. creates an instance with <code>DB(dsn)</code>, <code>DB(group)</code>, or <code>DB()</code>
+3. either returns it or save to <code>$this->db</code>
+
+### <code>system/database/DB.php</code>
+
+1. if it is dsn like <code>driver:sub://username:password@hostname/database?args</code>, parses it to get settings;
+   else tries to load from <code>config/(optional ENVIRONMENT/)database.php</code> in application and package paths. 
+   In any config directory, <code>config/database.php</code> only acts as a fallback. 
+   <code>$db[group][param]</code> keep connection setting, <code>$active\_group</code> specifies default group.
+2. <code>system/database/DB\_driver.php</code>
+3. by default, a query builder is used, so <code>system/database/DB\_active\_rec.php</code>
+4. <code>system/database/drivers/(driver)/(driver)\_driver.php</code>
+5. driver class name is <code>CI\_DB\_(driver)\_driver</code>
+6. creates a driver instance, if subdriver is needed, say for <code>PDO</code>, then 
+   <code>system/database/drivers/(driver)/subdrivers/(driver)\_(sub)\_driver.php</code> and creates a subdriver instance instead.
+   Subdriver class name is <code>CI\_DB\_(driver)\_(sub)\_driver</code>. 
+7. returns the instance.
+
+Database driver class hierarchy
+
+    CI_DB_driver <-- CI_DB_active_record 
+              A        A
+               \      /
+                \ or /
+                 CI_DB <-- CI_DB_(driver)_driver <-- CI_DB_(driver)_(sub)_driver
+
+Note: drivers execute sql queries, while query builders provide convenient wrapping functions.
+
+---
+
+## Caching support
+
+- page cache in <code>application/cache</code> enabled by <code>$this->output->cache(n)</code>
+- sql query cache on filesystem as specified by <code>$db['cachedir']</code>, indexed by parts of URI and md5 checksum of the sql. Cache files DO NOT expire!
+- driver internal metadata cache
+- external key-value cache provided by the caching driver
+
+### Caching driver <code>system/libraries/Cache/Cache.php</code>
+
+- supports apc, file (defaults to <code>application/cache</code>, one file per key), memcached, dummy
+- can specify a fallback in case the intended driver is not supported
+- instantiated by <code>$self->load->driver('cache', ...)</code> in the controller
+- abstract methods to be impelented in drivers: <code>get</code>, <code>save</code>, <code>delete</code>, <code>clean</code>, <code>cache_info</code>,
+<code>get_metadata</code> and <code>is_supported</code>. And <code>is_supported</code> is supposed to be called to do driver initialization
+
+Caching driver class hierarchy
+
+    CI_Driver_Library                           CI_Driver
+         A                     _____________________A___________________
+         |                    /           /               \             \
+      CI_Cache        CI_Cache_file  CI_Cache_apc  CI_Cache_memcached  CI_Cache_dummy
+
+---
+
+## Libaries and helpers summary
+
+| Library            | Description                                                |
+|:-------------------|:-----------------------------------------------------------|
+| Calendar           | Templated calendar display
+| Cart               | With session support, save cart information in database
+| Email              | Sends emails
+| Encryption         | Shared key encryption 
+| File Upload        | Saves file to configured upload directory
+| Form Validation    | Server side validation with specified rules
+| HTML Table         | Auto-generates HTML tables from arrays and database result sets
+| Image Manipulation | Resizes, Thumbnail creation, watermarking, etc
+| Migration          | Alters your database in a structured and organized manner
+| Pagination         | Produces pagination links
+| Session            | Manipulates session data in cookie store or database store
+| Typography         | Helps you format text
+| Unit Testing       | Runs unit tests, and display
+| User Agent         | Identifies user agent
+
+| Helper             | Description                                                |
+|:-------------------|:-----------------------------------------------------------|
+| Captcha            | Functions assist in creating CAPTCHA images
+| Cookie             | Functions that assist in working with cookies
+| Date               | Functions that help you work with dates
+| Download           | Generates server headers which force data to be downloaded
+| Form               | Functions that assist in working with forms
+| Language           | lang() loads a language line
+| Smiley             | Functions that let you manage smileys (emoticons)
+| URL                | site_url()
+| 
+
+---
+
+## Profiling
+
+Benchmark is always there; Profiler, when enabled, injects a report at the bottom of your pages.
+
+```PHP
+$this->output->enable_profiler(TRUE);
+```
+
+### Profiler sections
+
+| Key                | Description                                                |
+|:-------------------|:-----------------------------------------------------------|
+| benchmarks         | Elapsed time of Benchmark points and total execution time
+| config             | CodeIgniter Config variables
+| controller_info    | The Controller class and method requested
+| get                | Any GET data passed in the request
+| http_headers 	     | The HTTP headers for the current request
+| memory_usage 	     | Amount of memory consumed by the current request, in bytes
+| post 	             | Any POST data passed in the request
+| queries            | Listing of all database queries executed, including execution time
+| uri_string         | The URI of the current request
+| query_toggle_count | The number of queries after which the query block will default to hidden.
+
+---
+
+## Security concerns
+
+<code>CodeIgniter.php</code> instantiates <code>Security</code> and <code>Input</code> to handle security concern about user input data.
+
+### <code>system/core/Input.php: \_sanitize\_globals</code>
+
+1. unset globals[1] from <code>_GET</code>, <code>\_POST</code> and <code>\_COOKIE</code>, effectively as <code>register\_globals = Off</code> 
+2. <code>\_GET</code> is unset as well if it is not allowed by <code>$config['allow\_get\_array']</code>. Default is allow
+3. for key-value pairs in <code>_GET</code>, <code>\_POST</code> and <code>\_COOKIE</code>, only allow alpha-numeric text in keys, and values are sanitized by:
+  1. when <code>magic_quotes</code> are on, calls <code>stripslashes()</code> to unquote
+  2. when utf8 is on, discards illegal characters
+  3. remove invisible characters, aware of both urlencoding and plain
+  4. newlines are standardized by converting <code>\r\n</code>, <code>\r</code>, and <code>\r\n\n</code> to platform native PHP_EOL
+4. <code>$\_SERVER['PHP\_SELF']</code> are sanitized by <code>striptags</code>
+5. calls <code>csrf\_verify</code> ensure CSRF protection if enabled
+
+All accessors to globals like get(), post(), get_post(), cookie(), server(), get_request_header() take an optional argument to enable XSS filtering. ip_address() is always validated.
+
+[1] These globals are preserved: 
+<code>\_SERVER</code>, <code>\_GET</code>, <code>\_POST</code>, <code>\_FILES</code>, <code>\_REQUEST</code>, 
+<code>\_SESSION</code>, <code>\_ENV</code>, <code>GLOBALS</code>, <code>HTTP\_RAW\_POST\_DATA</code>,
+<code>system\_folder</code>, <code>application\_folder</code>, <code>BM</code>, <code>EXT</code>,
+<code>CFG</code>, <code>URI</code>, <code>RTR</code>, <code>OUT</code> and <code>IN</code>.
+
+_The global XSS filter will be removed_, it is better done in application code.
+
+### <code>system/core/Security.php: csrf\_verify</code>
+
+1. if it's not a POST request, sets the csrf cookie
+2. csrf token must be in both POST and COOKIE, and match each other
+3. strip the csrf token from POST and COOKIE
+4. refresh csrf hash and set cookie
+
+---
+
+## Error handling
+
+- <code>index.php</code> sets events mask for the standard PHP error handler
+- <code>CodeIgniter.php</code> registers a custom handler with <code>set_error_handler('\_exception\_handler')</code>.
+
+Notice custom error handlers have inherent shortage, as cited from manual:
+
+    The following error types cannot be handled with a user defined function:
+    E_ERROR, E_PARSE, E_CORE_ERROR, E_CORE_WARNING, E_COMPILE_ERROR, E_COMPILE_WARNING,
+    and most of E_STRICT raised in the file where set_error_handler() is called.
+
+In these cases, one needs to check the standard PHP error handler which is affected by both <code>error\_reporting()</code> in <code>index.php</code>
+and related settings in <code>php.ini</code>.
+
+### <code>system/core/Common.php: \_exception\_handler</code>
+
+1. disables "strict" notice since it is usually flooding
+2. if the event is not filtered, formats and displays it
+3. if CodeIgniter logging is enabled, logs into <code>application/logs/log-(Y-m-d).php</code>
+
+By default CodeIgniter logging is disabled, change <code>$config['log\_threshold']</code> to enable logging. The log directory can be configured.
+
+### Discussion
+
+Victims report, see forum threads: 179222, 189001, 206882, 215182, 218683, 221153, 234630, and github issue 2516
+
+_We can either set a permissive events mask for the standard PHP error handler, or use a shutdown handler to proxy to the custom error handler._
+
+---
+
+## Problems, cautions, and future
+
+- some guys tend to pollute the system directory
+
+  These guys should be warned.
+
+- filename casing when replacing or extending framework core components. 
+- case-sensitive URI segments
+- lack of consistent naming convention with dyamic loading until 2.1.4 inclusively
+- environment-specific and fallback configs
+- PHP parse error logging
+
+  2.1.x users should turn to the standard PHP error handlers.
+
+Andrey Andreev on the upcoming 3.0 release:
+
+> On the "thrilling" improvements I'd say just the overall stability of it. That's not to say that 3.0 is a maintenance release, it has a considerable amount of new features and support
+> for e.g. new databases, but the list is so numerous and with nothing that really stands out. Everything in it now just works faster and is more reliable.
+
+Stay tuned!
+
+---
+
+## Resources
+
+1. CodeIgniter user guide http://ellislab.com/codeigniter/user-guide/toc.html
+2. magic methods http://php.net/manual/en/language.oop5.magic.php
+3. variable variables http://www.php.net/manual/en/language.variables.variable.php
+4. extract http://cn2.php.net/manual/en/function.extract.php
+5. http://php.net/manual/en/function.set-error-handler.php
+6. http://insomanic.me.uk/post/229851073/php-trick-catching-fatal-errors-e-error-with-a
+7. https://github.com/EllisLab/CodeIgniter/pull/2633
+8. ReflectionObject http://php.net/manual/en/class.reflectionobject.php
+9. https://www.owasp.org/index.php/XSS_Filter_Evasion_Cheat_Sheet
+
+Powered by [remark.js](http://gnab.github.io/remark/)
+
+    </textarea>
+    <script src="http://gnab.github.io/remark/downloads/remark-0.5.4.min.js" type="text/javascript">
+    <!--<script src="remark-0.5.4.min.js" type="text/javascript">-->
+    </script>
+    <script type="text/javascript">
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
