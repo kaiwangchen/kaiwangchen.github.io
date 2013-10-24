@@ -1,0 +1,12 @@
+Compiled from "Hello.j"
+public class Hello extends java.lang.Object{
+public static void main(java.lang.String[]);
+  Signature: ([Ljava/lang/String;)V
+  Code:
+   0:	getstatic	#11; //Field java/lang/System.out:Ljava/io/PrintStream;
+   3:	ldc	#17; //String Hello
+   5:	invokevirtual	#19; //Method java/io/PrintStream.println:(Ljava/lang/String;)V
+   8:	return
+
+}
+

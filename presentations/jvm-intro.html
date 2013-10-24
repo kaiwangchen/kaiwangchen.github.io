@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Introduction to the Java Virtual Machine</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+    <style type="text/css">
+      /* Slideshow styles */
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+
+class: center, middle
+
+# Introduction to the Java Virtual Machine
+
+kaiwang.chen at gmail.com
+
+Oct 25, 2013
+
+---
+
+## Agenda
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+
+---
+
+- **Java Virtual Machine compared to real machine**
+  - Computer system abstraction levels
+  - Java Virtual Machine compared to real machine
+  - Say hello
+  - Typical transformation flow
+  - Hello sources
+  - What's inside?
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+
+---
+
+## Computer system abstraction levels
+
+_All problems in computer science can be solved by another level of indirection... Except for the problem of too many layers of indirection. (David Wheeler)_
+
+                     +------------------------+
+                     |    Java application    |
+    +----------------+------------------------+
+    |  Application   |  Java Virtual Machine  |
+    +----------------+------------------------+
+    (         Operating System Kernel         )
+    +-----------------------------------------+
+    | hardware: CPU, memory, I/O devices, ... |
+    +-----------------------------------------+
+
+- Operating System Kernel ensures integrity and isolation
+- A Java Virtual Machine instance runs only one Java application
+- Java Virtual Machines are regular OS applications
+
+---
+
+## Java Virtual Machine compared to real machine
+
+|                   | Real machine(e.g.) |   Java Virtual Machine        |
+|:------------------|:---------- --------|:------------------------------|
+| instruction set   | x86                | the JVM instruction set       |
+| assembly          | Intel, AT&amp;T    | javap, Jasmin                 |
+| assembler         | nasm, gcc          | jasmin.jar                    |
+| executable format | ELF                | class                         |
+| dynamic linker    | ld-linux.so.2      | class loader                  |
+| register          | pc and many others | pc                            |
+| memory allocation | stack, heap        | JVM stack, heap, native stack, ... |
+| stack frame       | registers, locals  | locals, operand stack, ...    |
+| exceptions        | interrupt vectors  | exception tables              |
+| isolation         | process, jail      | classloader, multi-tenant JVM |
+| symbol table      | symbol table       | constant pools                |
+| endianess         | little-endian      | big-endian                    |
+
+---
+
+## Say hello
+
+```
+$ ./hello
+Hello
+$ file hello
+hello: ELF 64-bit LSB executable, ... dynamically linked ...
+$ ldd hello
+	linux-vdso.so.1 =&gt;  (0x00007fff23926000)
+	libc.so.6 =&gt; /lib64/libc.so.6 (0x0000003460000000)
+	/lib64/ld-linux-x86-64.so.2 (0x000000345fc00000)
+```
+When hello is loaded, the OS passes control to _ld-linux.so.2_ instead of normal entry point of the application.
+ld-linux.so.2 searches for and loads the unresolved libraries, and then it passes control to the application starting point.
+
+```
+$ java Hello
+Hello
+$ file Hello.class
+Hello.class: compiled Java class data, version 50.0
+```
+Same mechanism; the java launcher is started, which intializes JVM to interpret Hello.class.
+
+---
+
+## Typical transformation flow
+
+     high-level code   assembly code
+            |              |
+      +----------+   +-----------+
+      | compiler |   | assembler | 
+      +----------    +-----------+
+            |     ________/ 
+            V    V
+        executable (instructions)          runtime libraries
+                \_____________    _____________/
+                              \  /
+                       +----------------+
+                       | dynamic linker |
+                       +----------------+
+                               |
+                               V
+           (complete program to run on execution engine)
+
+---
+
+- Java Virtual Machine compared to real machine
+  - Computer system abstraction levels
+  - Java Virtual Machine compared to real machine
+  - Say hello
+  - Typical transformation flow
+  - **Hello sources**
+    - Hello in the C way
+    - Hello in the assembly way
+    - Hello in the Java way
+    - Hello in the Java assembly way
+  - What's inside?
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+
+---
+
+## Hello in the C way
+
+```c
+// hello.c -- gcc hello.c -o hello
+#include &lt;stdio.h&gt;
+
+int main (void) {
+  printf("Hello\n");
+  return 0;
+}
+```
+
+---
+
+## Hello in the assembly way
+
+```att
+// hello.s -- gcc hello.s -o hello
+	.section	.rodata
+.LC0:
+	.string	"Hello"
+	.text
+.globl main
+	.type	main, @function
+main:
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movl	$.LC0, %edi
+	call	puts
+	movl	$0, %eax
+	leave
+	ret
+```
+
+---
+
+## Hello in the Java way
+
+```java
+// Hello.java -- javac Hello.java
+public class Hello {
+  public static void main (String[] args) {
+    System.out.println("Hello");
+  }
+}
+```
+
+---
+
+## Hello in the Java assembly way
+
+```
+; Hello.j -- java -jar jasmin-2.4/jasmin.jar Hello.j
+.class public Hello
+.super java/lang/Object
+.method public static main([Ljava/lang/String;)V
+  getstatic java/lang/System/out Ljava/io/PrintStream;
+  ldc "Hello"
+  invokevirtual java/io/PrintStream/println(Ljava/lang/String;)V
+  return
+.end method
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+  - Computer system abstraction levels
+  - Java Virtual Machine compared to real machine
+  - Say hello
+  - Typical transformation flow
+  - Hello sources
+  - **What's inside?**
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+
+---
+
+## What's inside?
+
+```att
+// objdump -d hello  (edited)
+0000000000400498 &lt;main&gt;:
+  400498:  55                  push   %rbp
+  400499:  48 89 e5            mov    %rsp,%rbp
+  40049c:  bf a8 05 40 00      mov    $0x4005a8,%edi
+  4004a1:  e8 f2 fe ff ff      callq  400398 &lt;puts@plt&gt;
+  4004a6:  b8 00 00 00 00      mov    $0x0,%eax
+  4004ab:  c9                  leaveq
+  4004ac:  c3                  retq
+```
+
+```
+// javap -c Hello  (edited)
+public class Hello extends java.lang.Object{
+public static void main(java.lang.String[]);
+  Code:
+   0:  b2 00 0b    getstatic     #11;
+   3:  12 11       ldc           #17;
+   5:  b6 00 13    invokevirtual #19;
+   8:  b1          return
+}
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- **Inside the Java Virtual Machine**
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Java Virtual Machine architecture
+                                      +========================+
+         class file --------------&gt;   | class loader subsystem |
+                                      +========================+
+                                             ||    /\
+                                             \/    ||
+    +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
+    | Run-Time data area                                        |
+       +--------+ +------+   +----------+ +-------+ +--------+   
+    |  | method | | heap |   | pc       | | JVM   | | native |  |
+       | area   | +------+   | registers| | stacks| | stacks |   
+    |  +--------+            +----------+ +-------+ +--------+  |
+    +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
+           ||  /\                          |
+           \/  ||                          |
+     +==================+         +- - - - - - - - - +
+     | execution engine |  -----  | native interface |  &lt;--- native library
+     +==================+         +- - - - - - - - - +
+- Method area and heap are shared; pc register, JVM stack and native stack are per JVM thread.
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - **Execution engine**
+    - Instruction set summary
+    - Stack-oriented architecture
+    - JVM stack frame demo
+    - Method invocation and return
+    - Native stack
+    - Exception handling
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Execution engine
+
+Ignoring exceptions, the inner loop of a Java Virtual Machine interpreter is
+effectively:
+
+```
+do {
+  atomically calculate pc and fetch opcode at pc;
+  if (operands)
+    fetch operands;
+  execute the action for the opcode;
+} while (there is more to do);
+```
+
+---
+
+## Instruction set summary
+
+- load and store: transfer values between locals and the operand stack
+- arithmetic
+- type conversion between numberic types
+- object creation and manipulation
+- direct manipulation of the operand stack
+- control transfer: conditional and unconditional jumps
+- method invocation and return
+- throwing exceptions
+- synchronization
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+    - Instruction set summary
+    - **Stack-oriented architecture**
+    - JVM stack frame demo
+    - Method invocation and return
+    - Native stack
+    - Exception handling
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Stack-oriented architecture
+
+The Java Virtual Machine is stack-oriented, with most operations taking one or
+more operands from the **operand stack** of the Java Virtual Machine's **current frame**
+or pushing results back onto the operand stack.
+
+```
+         +- - - - - - - - - -+                                   
+ +----+  |       method area |            JVM stack          
+ | pc |  |                   |          +==========+ bottom 
+ +----+     +---------+                 :          :       
+     \      | iload_0 |      |          |==========|      
+      `------)iconst_3|                 | array of |    c
+         |  | imul    |      |          | locals   |  f u
+            | ireturn |                 |----------|  r r
+         |  +---------+      |    .------   ptr    |  a r
+            +-----------+        /      |----------|  m e
+         |  | per-class |(------^       | operand  |  e n
+            | constant  |             | | stack    |    t
+         |  | pool      |    |        | |==========|
+         |  +-----------+    |        | |          |       
+         +- - - - - - - - - -+        V                    
+                                    stack                  
+f(i)=i*3                            grows
+```
+
+---
+
+## JVM stack frame demo
+
+```java
+  public static int f (int i) {
+    return i*3;  // iload_0 iconst_3 imul ireturn
+  }
+```
+
+```
+f(4)
+                 iload_0 iconst_3   imul
+        +=====+  +=====+  +=====+  +=====+ 
+local 0 |  4  |  |  4  |  |  4  |  |  4  | 
+        |-----|  |-----|  |-----|  |-----| 
+        :     :  :     :  :     :  :     : 
+        :     :  :     :  :     :  :     : 
+        |-----|  |-----|  |-----|  |-----| 
+operand |     |  |  4  |  |  4  |  | 12  | 
+stack   |-----|  |-----|  |-----|  |-----| 
+        |     |  |     |  |  3  |  |     | 
+        |=====|  |=====|  |=====|  |=====| 
+```
+
+---
+
+## Method invocation and return
+
+```java
+  public static int f(int i) { return i*3; }
+  public static void main(String[] args) { f(4); }
+```
+
+```
+public static int f(int);
+  Signature: (I)I
+  Code:
+   0:	iload_0
+   1:	iconst_3
+   2:	imul
+   3:	ireturn
+public static void main(java.lang.String[]);
+  Signature: ([Ljava/lang/String;)V
+  Code:
+   0:	iconst_4
+   1:	invokestatic	#2; //Method f:(I)I
+   4:	pop
+   5:	return
+```
+
+---
+
+## Method invocation and return, cont.
+
+A new frame is created each time a method is invoked. A frame is destroyed when
+its method invocation completes.
+
+```
+                     f(4)                 
+main +=====+       +=====+    +=====+    +=====+
+     |     |       |     |    |     |    |     |
+     |     |       |     |    |     |    |     |
+     |-----|     f |=====|    |=====|    |-----|
+     |  4  |       |  4  |    |  4  |    | 12  |
+     |=====|       |-----|    |-----|    |=====|
+                   :     :    :     : 
+                   |-----|    |-----| 
+|                  |     |    | 12  | 
+|                  |-----|    |-----| 
+|                  |     |    |     | 
+|                  |=====|    |=====| 
+V     
+stack 
+grows 
+```
+
+---
+
+## Native stack
+
+```
+call chain: #1, #2, #3, #4, #5
+
+JVM stack   native stack
+              +----+
+              |    | bootstrap
+              |----|
+ +====+        
+ | #1 |       
+ |====|       
+ | #2 |       
+ |====|       |----|
+              | #3 |
+              |----|
+              | #4 |
+              |----|
+ |====|
+ | #5 |
+ |====|
+ |    |
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+    - Instruction set summary
+    - Stack-oriented architecture
+    - JVM stack frame demo
+    - Method invocation and return
+    - Native stack
+    - **Exception handling**
+      - Exception table and 'finally' inlining
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Exception handling
+
+- Each method may be associated with zero or more exception handlers.
+- On exception, the system either jumps to proper handler, or rewinds frame and rethrows.
+
+```java
+  // f1 has no exception table
+  public void f1() throws Exception {
+  }
+```
+
+```java
+  // f2 has exception table
+  public int f2() {
+    int i;
+    try {
+      i=0;
+    }
+    catch (Exception e) {
+      i=1;
+    }
+    finally {
+      i=2;
+    }
+    return i;
+  }
+```
+
+---
+
+## Exception table and 'finally' inlining
+
+
+```
+  Code:
+   0:   iconst_0    // try {
+   1:   istore_1    //   i=0
+   2:   iconst_2
+   3:   istore_1    //   i=2
+   4:   goto  20    // }
+   7:   astore_2    // catch (Exception) { save exception
+   8:   iconst_1
+   9:   istore_1    //   i=1
+   10:  iconst_2
+   11:  istore_1    //   i=2
+   12:  goto  20    // }
+   15:  astore_3    // catch (*) { save exception
+   16:  iconst_2
+   17:  istore_1    // i=2
+   18:  aload_3     // load exeption
+   19:  athrow      // rethrow }
+   20:  return
+  Exception table:
+   from   to  target type
+     0     2     7   Class java/lang/Exception
+
+     0     2    15   any
+     7    10    15   any
+    15    16    15   any
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - **Class file**
+    - Class file structure
+    - Elements of structures
+    - Hello.class anatomized
+    - Hello.class disassembled
+    - What does #nn mean?
+    - A visual impression
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+
+---
+
+## Class file - what's inside?
+
+### Hello.class
+
+```
+00000000  ca fe ba be 00 03 00 2d  00 17 0c 00 14 00 16 01  |.......-........|
+00000010  00 16 28 5b 4c 6a 61 76  61 2f 6c 61 6e 67 2f 53  |..([Ljava/lang/S|
+00000020  74 72 69 6e 67 3b 29 56  07 00 10 01 00 10 6a 61  |tring;)V......ja|
+00000030  76 61 2f 6c 61 6e 67 2f  4f 62 6a 65 63 74 07 00  |va/lang/Object..|
+00000040  04 07 00 0e 01 00 07 48  65 6c 6c 6f 2e 6a 07 00  |.......Hello.j..|
+00000050  12 01 00 04 43 6f 64 65  01 00 04 6d 61 69 6e 09  |....Code...main.|
+00000060  00 08 00 01 01 00 0a 53  6f 75 72 63 65 46 69 6c  |.......SourceFil|
+00000070  65 0c 00 0f 00 15 01 00  13 6a 61 76 61 2f 69 6f  |e........java/io|
+00000080  2f 50 72 69 6e 74 53 74  72 65 61 6d 01 00 07 70  |/PrintStream...p|
+00000090  72 69 6e 74 6c 6e 01 00  05 48 65 6c 6c 6f 08 00  |rintln...Hello..|
+000000a0  10 01 00 10 6a 61 76 61  2f 6c 61 6e 67 2f 53 79  |....java/lang/Sy|
+000000b0  73 74 65 6d 0a 00 06 00  0d 01 00 03 6f 75 74 01  |stem........out.|
+000000c0  00 15 28 4c 6a 61 76 61  2f 6c 61 6e 67 2f 53 74  |..(Ljava/lang/St|
+000000d0  72 69 6e 67 3b 29 56 01  00 15 4c 6a 61 76 61 2f  |ring;)V...Ljava/|
+000000e0  69 6f 2f 50 72 69 6e 74  53 74 72 65 61 6d 3b 00  |io/PrintStream;.|
+000000f0  21 00 03 00 05 00 00 00  00 00 01 00 09 00 0a 00  |!...............|
+00000100  02 00 01 00 09 00 00 00  15 00 02 00 01 00 00 00  |................|
+00000110  09 b2 00 0b 12 11 b6 00  13 b1 00 00 00 00 00 01  |................|
+00000120  00 0c 00 00 00 02 00 07                           |........|
+```
+
+---
+
+## Class file structure
+
+```c
+ClassFile {
+  u4 magic;
+  u2 minor_version;
+  u2 major_version;
+  u2 constant_pool_count;
+  cp_info constant_pool[constant_pool_count-1];  // symbols
+  u2 access_flags;
+  u2 this_class;
+  u2 super_class;
+  u2 interfaces_count;
+  u2 interfaces[interfaces_count];
+  u2 fields_count;
+  field_info fields[fields_count];    // fields
+  u2 methods_count;
+  method_info methods[methods_count]; // methods
+  u2 attributes_count;
+  attribute_info attributes[attributes_count];
+}
+```
+
+Array classes do not have an external binary representation;
+they are created by the Java Virtual Machine rather than by a class loader.
+
+---
+
+## Elements of structures
+
+```c
+field_info/method_info {
+  u2 access_flags;     // OOP encapsulation, etc
+  u2 name_index;       // member name
+  u2 descriptor_index; // type/signature
+  u2 attributes_count;
+  attribute_info attributes[attributes_count]; // definition etc
+}
+```
+
+### Attributes
+
+- Code
+- Exceptions
+- Signature
+- SourceFile
+- RuntimeVisibleAnnotations
+- ...
+
+
+
+---
+
+## Hello.class anatomized
+
+```
+00000000  ca fe ba be 00 03 00 2d  00 17 0c 00 14 00 16 01
+          magic...... minor major  (constant pool 1~22 ...
+
+000000e0  69 6f 2f 50 72 69 6e 74  53 74 72 65 61 6d 3b 00
+                                     ... constant pool) ac
+
+000000f0  21 00 03 00 05 00 00 00  00 00 01 00 09 00 0a 00
+          c. this. super nintf nfield nmeth (acc. name. ..
+             #3    #5                             #10 main
+             Hello java/lang/Object          public static
+
+00000100  02 00 01 00 09 00 00 00  15 00 02 00 01 00 00 00
+ ..signature natt. att.. length...... stack local code....
+   #2              #9 Code
+
+00000110  09 b2 00 0b 12 11 b6 00  13 b1 00 00 00 00 00 01
+    ..length opcodes.................... etbl. natt) natt.
+
+00000120  00 0c 00 00 00 02 00 07                         
+          name. length..... value
+          #12 SourceFile    #7 Hello.j
+```
+
+---
+
+## Hello.class disassembled
+
+```
+// javap -c -s Hello  (edited)
+public class Hello extends java.lang.Object{
+public static void main(java.lang.String[]);
+  Signature: ([Ljava/lang/String;)V
+  Code:
+   0:  b2 00 0b    getstatic     #11;
+   3:  12 11       ldc           #17;
+   5:  b6 00 13    invokevirtual #19;
+   8:  b1          return
+}
+```
+
+| mnemonic      | instruction  | description
+|:--------------|:-------------|:----------------------------------------|
+| getstatic     | 178(0xb2)    | push static field onto operand stack    |
+| ldc           |  18(0x12)    | push item onto operand stack            |
+| invokevirtual | 182(0xb6)    | invoke instance method with objectref and args on operand stack |
+| return        | 177(0xb1)    | returns control to the invoker          |
+
+---
+
+## What does #nn mean?
+
+An index into the **constant pool**, refers to a *symbol*.
+
+| index | symbol type | symbol                | meaning
+|:------|:------------|:----------------------|:------------------
+|-------|-------------|-----------------------|-------------------
+| #3    |  class(7)   | Hello                 | this class
+| #5    |  class(7)   | java/lang/Object      | parent class
+| #10   |   utf8(1)   | main                  | method name
+| #2    |   utf8(1)   |([Ljava/lang/String;)V | method signature
+|-------|-------------|-----------------------|-------------------
+| #11   |  field(9)   | #8, #1                | (class, field)
+| #8    |  class(7)   | java/lang/System      | class of the field
+| #1    |       (12)  | #20, #22              |
+| #20   |   utf8(1)   | out                   | field name
+| #22   |   utf8(1)   | Ljava/io/PrintStream  | field type
+| #17   | string(8)   | Hello                 | string literal
+| #19   | method(10)  | #6, #13               | (class, method)
+| #6    |  class(7)   | java/io/PrintStream   | class of the method
+| #13   |       (12)  | #15, #21              |
+| #15   |   utf8(1)   | println               | method name
+| #21   |   utf8(1)   | (Ljava/lang/String;)V | method signature
+
+---
+
+## A visual impression
+
+(insert constant pool here)
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - **Class/interface and instance lifecycle**
+    - Garbage collection - reachability
+    - Class loader architecture
+    - Loading constraints
+    - Load a class
+    - java.lang.Classloader
+    - A custom class loader
+    - Linking and initialization
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Class/interface and instance lifecycle
+
+```
+class/interface lifecycle                         object lifecycle
+
+             +-------------+
+             | link        |
++------+     |             |                      +---------------+
+| load | --) |  ( verify ) |                .- -) | instantialize |
++------+     |      ||     |               /      +---------------+
+             |      \/     |                                  |
+             | ( prepare ) |             /                     
+             |      ||     |                                  |
+             |      \/     |           /                      V
+             | ( optional  |     +------------+             +----+
+             |   resolve ) | --) | initialize | - - - - --) | gc |
+             +-------------+     +------------+             +----+
+
+```
+
+---
+
+## Garbage collection - reachability
+
+```java
+public class Example {
+  public static void main (String[] args) {
+    Example o = new Example;
+  }
+}
+```
+```
+                  Example's       Example's
+                  class data    Class instance
+                    +----+          .--.         +----+
+               .--> |    | ------> (    ) -----> |    |
+ locals       /     +----+          `--^         +----+
+ +===+     .--.                               java.lang.Class
+ | o |--> (    )
+ +===+     `--^ instance of Example
+
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+    - Garbage collection - reachability
+    - **Class loader architecture**
+    - Loading constraints
+    - Load a class
+    - java.lang.Classloader
+    - A custom class loader
+    - Linking and initialization
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Class loader architecture
+
+### parent-delegation model
+
+Any request for a class loader to load a given class is first delegated to its parent class loader *before* the requested class loader tries to load the class itself. 
+
+```
+  (JVM-supplied
+   bootstrap class loader): core classes in rt.jar etc
+            A
+            |
+   extension class loader: extention classes in jre/lib/ext/*.jar
+            A
+            |
+    system class loader: tools.jar and user classes
+            A           by option -classspath or env CLASSPATH
+            |
+     URL class loader
+```
+
+---
+
+
+## Loading constraints
+
+- defining loader Ld: creates class C directly
+- initiating loader Li: initiates loading of class C
+
+At run time, a class or interface is determined *not by its name alone, but by a pair (N, Ld)*:
+its fully qualified name N and its defining class loader Ld.
+
+### Loading constraint violation
+
+- N<sup>Li</sup> = N<sup>Li<sup>'</sup></sup>
+- (N, Ld) &ne; (N, Ld<sup>'</sup>)
+
+
+---
+
+## Load a class
+
+### runtime linking
+
+```java
+  Example obj = new Example();
+```
+
+### dynamic loading
+
+```java
+  // use invoker's classloader
+  Class.forName("Example");
+
+  // default parent is system classloader
+  classloader = new URLClassloader(url);
+  classloader.loadClass("Example");
+```
+
+
+---
+
+## java.lang.Classloader 
+
+```java
+public synchronized Class<?> loadClass(String name) {
+  Class c = findLoadedClass(name);
+  if (c == null) {
+    try {
+      if (parent != null) {
+        c = parent.loadClass(name, false); // delegates to parent
+      } else {
+        c = findBootstrapClass0(name); // bootstrap
+      }
+    } catch (ClassNotFoundException e) {  
+      c = findClass(name);
+    }
+  }
+  return c;
+}
+protected Class<?> findClass(String name) throws ClassNotFoundException {
+  throw new ClassNotFoundException(name);
+}
+```
+
+---
+
+## A custom class loader
+
+```java
+protected Class<?> findClass(String name) throws ClassNotFoundException {
+  byte[] classData = null;
+  BufferedInputStream bis = new BufferedInputStream(new FileInputStream(name));
+  ByteArrayOutputStream out = new ByteArrayOutputStream();
+  try {
+    int c = bis.read();
+    while ( c != -1 ) {
+      out.write(c);
+      c = bis.read();
+    }
+    classData = out.toByteArray();
+  } catch {IOException e) {
+    throw new ClassNotFoundException();
+  }
+  // converts the byte buffer into an instance of class Class
+  return defineClass(name, classData, 0, classData.length);
+}
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+    - Garbage collection - reachability
+    - Class loader architecture
+    - Loading constraints
+    - Load a class
+    - java.lang.Classloader
+    - A custom class loader
+    - **Linking and initialization**
+  - Security sandbox
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Linking and initialization
+
+All references in the per-type run-time constant pool are initially symbolic.
+
+- verification
+    * ensures binary representation is structurally correct
+    * may cause additional classes and interfaces to be loaded w/o verification or preparation
+- preparation
+    * creates the static fields and sets to their default values (zero, null, etc)
+    * imposes loading constrants
+- resolution
+    * dynamically determines concrete values from symbolic references in the run-time constant pool
+    * class/interface, field, method, interface method, method handle, call site specifier
+- initialization
+    * initialization lock per class or interface
+    * explicit initializers for static fields
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+  - **Security sandbox**
+  - Object model
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Security sandbox
+
+- classloader and verifier, ensure internal application code integrity
+- security manager, mandatory access control of external resources
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - **Object model**
+    - Example object model
+    - Method table
+    - Class and object manipulation
+    - Instance.class - object creation and method invocation
+    - Instance.class - constructor
+    - Instance.class - instance method
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Example object model
+
+
+```
+   +------------------+   each object has its own instance data
+   | object reference |   and method table
+   +------------------+
+             |
+ +- - - - -  |  - - - - -+     +- - - - - - - - - - - - - - - - - - --+
+ | heap      |           |     | method area          +------------+  |
+             V           |     |                   .->| class data |   
+ |  +---------------+              method table    |  +------------+  |
+    |      vptr    --------------> +------------+ /                   
+ |  |---------------|    |     |   |   ptr     --^    +------------+  |
+    | instance data |              |------------|     | method     |   
+ |  |---------------|    |     |   | method ptr ----->| definition |  |
+    | instance data |              |------------|     +------------+   
+ |  |---------------|    |     |   | method ptr --.   +------------+  |
+    | instance data |              +------------+  `->| method     |   
+ |  +---------------+    |     |                      | definition |  |
+ |                       |     |                      +------------+  |
+ +- - - - - - - - - - - -+     +- - - - - - - - - - - - - - - - - - --+
+```
+
+---
+
+### Method table
+
+Object-Oriented Programming: polymorphism
+
+```java
+public class Example {
+  public String toString() {
+    return "Example";
+  }
+}
+```
+
+```
+   Example's method table
+  +-----------------------+
+  | ptr to clone()        |-------> Object's definition
+  |-----------------------|          A
+  | ptr to equals(Object) |---------^ 
+  |-----------------------|
+  |  ...                  |
+  |-----------------------|
+  | ptr to toString()     |-------> Example's definition
+  +-----------------------+
+
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+    - Example object model
+    - Method table
+    - **Class and object manipulation**
+    - Instance.class - object creation and method invocation
+    - Instance.class - constructor
+    - Instance.class - instance method
+  - Multi-thread synchronization
+- HotspotVM support techniques
+
+---
+
+## Class and object manipulation
+
+```java
+// Instance.java
+public class Instance {
+  int m;
+  public Instance(int x) {
+    m = x;
+  }
+  public int f(int i) {
+    return i*m;
+  }
+  public static void main(String args[]) {
+    new Instance(4).f(3);
+  }
+}
+```
+
+---
+
+## Instance.class - object creation and method invocation
+
+- **&lt;<span></span>init&gt;**: special method for instance initialization 
+
+```
+public static void main(java.lang.String[]);
+  Code:
+   0:  new  #3;            // uninitialized instance of Instance
+   3:  dup
+   4:  iconst_4
+   5:  invokespecial  #4;  // intialize by "<init>":(I)V
+   8:  iconst_3
+   9:  invokevirtual  #5;  // invoke intance method f:(I)I
+   12: pop
+   13: return
+```
+
+---
+
+## Instance.class - constructor
+
+- *putfield*: set field in object
+
+```
+int m;
+
+public Instance(int);
+  Code:
+   0:  aload_0
+   1:  invokespecial  #1; // super constructor
+                          // java/lang/Object."<init>":()V
+   4:  aload_0
+   5:  iconst_0
+   6:  putfield  #2;      // Field m:I
+   9:  aload_0
+   10: iload_1            // int x
+   11: putfield  #2;      // Field m:I
+   14: return
+```
+
+---
+
+## Instance.class - instance method
+
+- *getfield*: fetch field from object
+
+```
+public int f(int);
+  Code:
+   0:	iload_1
+   1:	aload_0
+   2:	getfield  #2; //Field m:I
+   5:	imul
+   6:	ireturn
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+  - Java Virtual Machine architecture
+  - Execution engine
+  - Class file
+  - Class/interface and instance lifecycle
+  - Security sandbox
+  - Object model
+  - **Multi-thread synchronization**
+    - Object monitor
+    - Synchronization example
+    - Implicit synchronization
+    - Explicit synchronization
+- HotspotVM support techniques
+
+---
+
+## Multi-thread synchronization
+
+Each instance is associated with an object monitor.
+
+```
+An object monitor
+                       owner
+                   +--------------+  waiting area
+     entrance      |              |-----------+
+     +-------------|            3 release     |
+     |    ( )   2 aquire         ---)         |
+ 1  --)          ---)     (*)     |  ( ) ( )  |
+     |  ( )  ( )   |            4 aquire      |
+     +-------------|            (---          |
+                   | 5 release    |-----------+
+                   | and exit     |
+                   +--- | --------+
+                        V
+  ( ) blocked thread
+  (*) active thread
+```
+
+---
+
+### Synchronization example
+
+```java
+public class Sync {
+  // implicit
+  public synchronized void f1() {
+  }
+
+  public void f2(Object o) {
+    // explicit
+    synchronized (o) {
+      
+    }
+  }
+}
+```
+
+---
+
+## Implicit synchronization
+
+- distinguished in the run-time constant pool
+- checked by the method invocation instructions
+
+```
+public synchronized void f1();
+  Code:
+   0: return
+```
+
+---
+
+## Explicit synchronization
+
+```
+public void f2(java.lang.Object);
+  Code:
+   0:  aload_1
+   1:  dup
+   2:  astore_2
+   3:  monitorenter     // aquire lock
+   4:  aload_2          // try {
+   5:  monitorexit      //   release lock
+   6:  goto  14         // }
+   9:  astore_3         // catch (*) {
+   10: aload_2
+   11: monitorexit      //   release lock
+   12: aload_3
+   13: athrow           // }
+   14: return
+  Exception table:
+   from   to  target type
+     4     6     9   any
+     9    12     9   any
+```
+
+---
+
+- Java Virtual Machine compared to real machine
+- Inside the Java Virtual Machine
+- **HotspotVM support techniques**
+  - Hotspot generational garbage collection
+    - Garbage collection metrics
+    - Hotspot garbage collectors
+  - Thread dump analysis
+  - Heap dump analysis
+  - Gc performance
+  - Process limits
+  - Java EE support patterns
+  - Performance tracking
+  - Just-In-Time compilation
+
+---
+
+## Hotspot generational collection
+
+Hostpot heap generations: a *young* (*eden* and two *survivor spaces*), an *old*, and a *permanent*
+
+```
+                      || allocation
+Young generation      \/
+   +- - - - - - - - - - - - - - - - - - - - - - - - - -- - - -+
+   |  .---.   .-.   .-------.    .--.    .-.    .-.    .-.    |
+   | (  X  ) ( X ) (    X    )  (    )  ( X )  ( X )  ( X )   | Eden
+   |  `---^   `-^   `-------^    `- \    `-^    `-^    `-^    |
+   +- - - - - - - - - - - - - - - - -\- - - - - - - - - - - - +
+   From                         To    \
+   +- - - - - - - - - - - - -+  +- - - \ - - - - - - - - -+ 
+   |  .---.   .--.   .----.  |  |       V                 |
+   | (  X  ) (    ) (      ------->           e m p t y   | Survivor spaces
+   |  `---^   `- \   `----^  |  |                         |
+   +- - - - - - - \ - - - - -+  +- - - - - - - - - - - - -+
+                   \                  
+Old generation      `-----.
+   +- - - - - - - - - - -  \  - - - - - - - - - - - - - - - - - - - - -+
+   |  .---.   .---------.   V                                          |
+   | (     ) (           )                                             |
+   |  `---^   `---------^                                              |
+   +- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -+
+
+```
+
+---
+
+## Garbage collection metrics
+
+- throughput
+- gc overhead
+- pause time
+- frequency of collection
+- footprint
+
+---
+
+## Hotspot garbage collectors
+
+### serial collector
+
+young: stop-the-world and copy, old: mark-sweep-compact
+
+### parallel collector, a.k.a. throughput collector
+
+young: stop-the-world and copy in parallel, old: mark-sweep-compact
+
+### parallel compacting collector
+
+young: stop-the-world and copy in parallel, old: stop-the-world, mostly parallel fashion with sliding compaction
+
+### concurrent mark-sweep (CMS), a.k.a. low-latency collector
+
+young: stop-the-world and copy in parallel, old: pause mark, concurrent mark, remark, concurrent sweep, *no compaction*
+
+CMS starts at a learned time or on crossing occupancy threshold; other collectors starts when old generation becomes full.
+
+---
+
+- Java Virtual Machine compared to real machine           
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+  - Hotspot generational garbage collection
+  - **Thread dump analysis**
+    - Hotspot multi-threading model
+    - Typical threads in a Java EE container VM                        
+    - Acquiring a thread dump                                          
+    - Hotspot thread dump structure                                    
+    - Thread stack trace
+  - Heap dump analysis
+  - Gc performance
+  - Process limits
+  - Java EE support patterns
+  - Performance tracking
+  - Just-In-Time compilation
+
+---
+
+## Hotspot multi-threading model
+
+- preemptive multithreading based on native threads
+- kernel-level threading (1:1)
+
+```
+$ ps -p 23901
+  PID TTY          TIME CMD
+23901 ?        00:19:27 java
+$ ps -p 23901 -L
+  PID   LWP TTY          TIME CMD
+23901 23901 ?        00:00:00 java
+23901 23902 ?        00:00:05 java
+23901 23903 ?        00:00:00 java
+23901 23904 ?        00:00:00 java
+...
+```
+
+---
+
+## Typical threads in a Java EE container VM
+
+- performing raw computing tasks such as XML parsing, IO / disk access etc.
+- waiting for some blocking IO calls such as a remote Web Service call, a DB / JDBC query etc.
+- involved in garbage collection at that time e.g. GC threads
+- waiting for some work to do (typically in wait() state)
+- waiting for some other threads work to complete e.g. threads waiting to acquire a monitor lock (synchronized block{}) on some objects
+
+
+---
+
+## Acquiring a thread dump
+
+A JVM thread dump is a snapshot taken at a given time which provides you with a complete listing of all created Java threads. 
+
+```
+$ jstack <pid> > stack.tdump
+```
+
+---
+
+## Hotspot thread dump structure
+
+1. full thread dump identifier and Hotspot version
+2. application thread pools
+3. main thread
+4. VM thread (internal hotspot operations)
+5. GC threads
+6. JNI global reference counts, heap breakdown
+
+Each individual thread gives:
+
+```
+(thread name) (thread type and priority) (Java thread id) (native thread id) (thread state)
+   (thread state detail)
+    (Java thread stack trace)
+```
+
+---
+
+## Thread stack trace
+
+A Thread stack trace provides you with a snapshot of its current execution, read from *bottom-up*.
+
+- identify the originator (Java EE container Thread, custom Thread ,GC Thread, JVM internal Thread, standalone Java program "main" Thread etc.c)
+- identify the type of request the thread is executing (WebApp, Web Service, JMS, Remote EJB (RMI), internal Java EE container etc)
+- identify your application module(s) involved
+- top ~10 lines: identify *the protocol or work the thread is involved* with e.g. HTTP call, Socket communication, JDBC or raw computing tasks such as disk access, class loading etc.
+- the *first line* usually tells a LOT on the thread state
+
+---
+
+- Java Virtual Machine compared to real machine           
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+  - Hotspot generational collection
+  - Thread dump analysis
+  - **Heap dump analysis**
+    - Acquiring a heap dump
+    - Heap dump analysis tools
+  - Gc performance
+  - Process limits
+  - Java EE support patterns
+  - Performance tracking
+  - Just-In-Time compilation
+
+---
+
+## Acquiring a heap dump
+
+- get heap dump on an OutOfMemoryError
+```
+ -XX:+HeapDumpOnOutOfMemoryError
+```
+
+- manually trigger a heap dump
+```
+$ jmap -dump:format=b,file=<filename.hprof> <pid>
+```
+
+---
+
+### Heap dump analysis tools
+
+- visualvm
+- jhat
+```
+$ jhat heap.hprof
+Started HTTP server on port 7000
+```
+  * /oql
+  * /oqlhelp 
+```
+select <JavaScript expression to select>
+[ from [instanceof] <class name> <identifier>
+[ where <JavaScript boolean expression to filter> ] ]
+```
+- Eclipse Memory Analyzer (MAT)
+
+---
+
+- Java Virtual Machine compared to real machine           
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+  - Hotspot generational collection
+  - Thread dump analysis
+  - Heap dump analysis
+  - **Gc performance**
+  - Process limits
+  - Java EE support patterns
+  - Performance tracking
+  - Just-In-Time compilation
+
+---
+
+## Gc performance
+
+- gc logging
+```
+ -verbosegc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/tmp/gc.log
+
+ 0.437: [GC [PSYoungGen: 262208K->43632K(305856K)]
+       262208K->137900K(1004928K), 0.1396040 secs]
+       [Times: user=0.45 sys=0.01, real=0.14 secs]
+
+ 1.188: [Full GC (System) [PSYoungGen: 43632K->0K(305856K)]
+       [PSOldGen: 296856K->340433K(699072K)]
+       340488K->340433K(1004928K)
+       [PSPermGen: 1554K->1554K(16384K)], 0.4053311 secs]
+       [Times: user=0.41 sys=0.00, real=0.40 secs] 
+```
+
+- interactive view
+```
+$ top -p <GC Thread native ids from thread stack dump >
+$ jstat -gcutil <pid> 1s
+  S0     S1     E      O      P     YGC     YGCT    FGC    FGCT     GCT   
+ 74.97   0.00  18.87   9.09  99.95     50    6.939     0    0.000    6.939
+```
+
+---
+
+- Java Virtual Machine compared to real machine           
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+  - Hotspot generational collection
+  - Thread dump analysis
+  - Heap dump analysis
+  - Gc performance
+  - **Process limits**
+    - Process address space
+  - Java EE support patterns
+  - Performance tracking
+  - Just-In-Time compilation
+
+---
+
+## Process limits
+
+```
+$ cat /proc/<pid>/limits 
+Limit                     Soft Limit           Hard Limit           Units     
+Max cpu time              unlimited            unlimited            seconds   
+Max file size             unlimited            unlimited            bytes     
+Max data size             unlimited            unlimited            bytes     
+Max stack size            10485760             unlimited            bytes     
+Max core file size        0                    unlimited            bytes     
+Max resident set          unlimited            unlimited            bytes     
+Max processes             139264               139264               processes 
+Max open files            1024                 1024                 files     
+Max locked memory         32768                32768                bytes     
+Max address space         unlimited            unlimited            bytes     
+Max file locks            unlimited            unlimited            locks     
+Max pending signals       139264               139264               signals   
+Max msgqueue size         819200               819200               bytes     
+Max nice priority         0                    0                    
+Max realtime priority     0                    0                    
+```
+
+---
+
+## Process address space
+
+```
+$ cat /proc/<pid>/maps    # also: pmap <pid>
+00400000-00401000 r-xp 00000000 08:01 262167              java
+00600000-00601000 rw-p 00000000 08:01 262167              java
+01219000-0123a000 rw-p 00000000 00:00 0                   [heap]
+...
+62f250000-759000000 rw-p 00000000 00:00 0 
+759000000-7fffe0000 rw-p 00000000 00:00 0
+...
+7f5875992000-7f5875993000 r--p 0001f000 08:01 2883936     /lib64/ld-2.12.so
+7f5875993000-7f5875994000 rw-p 00020000 08:01 2883936     /lib64/ld-2.12.so
+7f5875994000-7f5875995000 rw-p 00000000 00:00 0 
+7fff55216000-7fff5522b000 rw-p 00000000 00:00 0           [stack]
+7fff55349000-7fff5534a000 r-xp 00000000 00:00 0           [vdso]
+ffffffffff600000-ffffffffff601000 r-xp 00000000 00:00 0   [vsyscall]
+```
+
+---
+
+- Java Virtual Machine compared to real machine           
+- Inside the Java Virtual Machine
+- HotspotVM support techniques
+  - Hotspot generational collection
+  - Thread dump analysis
+  - Heap dump analysis
+  - Gc performance
+  - Process limits
+  - **Java EE support patterns**
+  - Performance tracking
+  - Just-In-Time compilation
+
+---
+
+## Java EE support patterns
+
+- hanging thread
+  * blocking I/O call
+  * heavy I/O contention
+  * waiting to acquire a lock
+  * forced to go in wait() state
+  * infinit looping
+  * deadlock or lock contention
+  * GC overhead limit
+- out of memory
+  * heap leak
+  * busy gc
+  * thread locals
+- pool depletion
+
+---
+
+## Performance tracking
+
+```
+ -Dcom.sun.management.jmxremote.port=<port>
+ -Dcom.sun.management.jmxremote.authenticate=false
+ -Dcom.sun.management.jmxremote.ssl=false
+```
+
+- realtime view
+  * jconsole, visualvm
+- history
+  * jmxtrans with graphite
+
+    ![heap usage](jvm-intro/heap-usage_400x225.png)
+
+---
+
+## Just-In-Time compilation
+
+- fast traditional compiler translating the Java technology bytecodes into native machine code on the fly.
+- hotspot optimization v.s. full optimization
+- default on, disable with -Djava.compiler=NONE
+- hotspot detection: -XX:CompileThreshold=10000
+
+---
+
+## Resources
+
+1. http://en.wikipedia.org/wiki/Java_virtual_machine
+2. Java&trade; Platform Standard Edition 6 Overview, http://docs.oracle.com/javase/6/docs/technotes/guides/
+3. The Java HotSpot Performance Engine Architecture, http://www.oracle.com/technetwork/java/whitepaper-135217.html
+4. Java Language and Virtual Machine Specifications, http://docs.oracle.com/javase/specs/
+5. http://en.wikipedia.org/wiki/X86
+6. Assembly language, http://en.wikipedia.org/wiki/Assembly_language
+7. John R. Levine, Linkers and Loaders (October 25, 1999), http://www.becbapatla.ac.in/cse/naveenv/docs/LL1.pdf
+8. Bill Venners, Inside the Java 2 Virtual Machine (January 6, 2000)
+9. Jon Meyer and Daniel Reynaud, Jasmin - an assembler for the Java Virtual Machine (2004), http://jasmin.sourceforge.net/
+0. Java 6 try/finally compilation without jsr/ret, http://cliffhacks.blogspot.com/2008/02/java-6-tryfinally-compilation-without.html
+1. Hotspot Group, http://openjdk.java.net/groups/hotspot
+2. Java HotSpot VM Options, http://www.oracle.com/technetwork/java/javase/tech/vmoptions-jsp-140102.html
+3. Pierre-Hugues Charbonneau, Java EE Support Patterns, http://javaeesupportpatterns.blogspot.com
+4. Eclipse Memory Analyzer, http://help.eclipse.org/indigo/topic/org.eclipse.mat.ui.help/welcome.html
+5. Oracle Java archive, http://www.oracle.com/technetwork/java/javase/archive-139210.html
+
+Powered by [remark.js](http://gnab.github.io/remark/)
+
+    </textarea>
+    <!--<script src="http://gnab.github.io/remark/downloads/remark-0.5.4.min.js" type="text/javascript">-->
+    <script src="remark-0.5.4.min.js" type="text/javascript">
+    </script>
+    <script type="text/javascript">
+      var slideshow = remark.create();
+    </script>
+  </body>
+</html>
