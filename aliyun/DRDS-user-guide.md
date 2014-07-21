@@ -177,7 +177,7 @@ DRDS may perform full table scan to support aggregations. The following cautions
 
 ### 1. `COUNT`
 
-1) `SELECT *`, `COUNT(*)` are not supported. Fields must be specified explicitly.
+1) `SELECT *, COUNT(*)` is not supported. The first star must be replaced with explicit fields.
 
 2) `SELECT COUNT(*) + 1` is not supported. No additional calculation are allowed.
 
