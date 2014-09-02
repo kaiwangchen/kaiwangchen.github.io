@@ -24,7 +24,7 @@ Q2. How to browse and search the collected logs?
 
 A2. You can search by keywords with `AND`, `OR` and `NOT` groups. Say some guy complained about data corruption, a search with "ERROR" shows certain requests contain non-UTF-8 characters, which suggests a bug because the application is UTF-8 only. A further search with "ERROR and UTF-8" gets 241 matches. Now it is time to push a patch.
 
-![Search](sls-search.png)
+![Search](sls-tutorial/sls-search.png)
 
 Please refer to [Query Grammer](http://wiki.aliyun-inc.com/projects/apsara/wiki/ShennongOpenService/IndexServer/QueryGrammer) for help about complex queries.
 
@@ -37,7 +37,7 @@ A3. Sure. Real-time aggregations such as `count`, `sum`, `avg`, `max`, `topk`, `
 
 Here is a snapshot of the requested real-time top20 list:
 
-![Aggregation](sls-aggregation.png)
+![Aggregation](sls-tutorial/sls-aggregation.png)
 
 
 ### Monitoring and Alerting
@@ -46,7 +46,7 @@ Q4. So far, so good. I want to be aware of critical errors when the server gener
 
 A4. SLS has an alerting plugin to turn real-time reports into alerts, which may also trigger execution of specified scripts. Please find below a snapshot, and refer to [Alarm Usage](http://slsweb.aliyun-inc.com/alarm_usage.pdf) for configuration instructions.
 
-![Alerting](sls-alert.png)
+![Alerting](sls-tutorial/sls-alert.png)
 
 
 ### Offline Analysis and Reports
@@ -57,8 +57,8 @@ A5. Sure. Logs collected by SLS can be fed into Open Data Processing Service (OD
 
 Here are a few snapshots.
 
-![Daily Reports](sls-daily-reports.jpg)
+![Daily Reports](sls-tutorial/sls-daily-reports.jpg)
 
-![ODPS Portal](sls-odps-portal.jpg)
+![ODPS Portal](sls-tutorial/sls-odps-portal.jpg)
 
 Interested? Please visit the [official website](http://slsweb.aliyun-inc.com).
