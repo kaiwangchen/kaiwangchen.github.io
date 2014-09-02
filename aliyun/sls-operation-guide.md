@@ -6,7 +6,7 @@ _Notice that this is not an official translation of [Chinese version](http://img
 Overview
 -------------------
 
-Typically, "server - log collection - log storage - browse and/or analysis" makes a complete log pipeline. With *ELK stack* from the open source world, *LogStash* collects logs, *ElasticSearch* is the log store, *Kibaba* aids browsing and searhing.
+Typically, "server - log collection - log storage - browse and/or analysis" makes a complete log pipeline. With *ELK stack* from the open source world, *LogStash* collects logs, *ElasticSearch* is the log store, *Kibaba* aids browsing and searching.
 
 [Simple Log Service (SLS)](http://www.aliyun.com/product/sls/) is an Aliyun service for tenant users to build their own logging infrastructure; it is roughly a replacement of *ELK stack*, eliminating significant maintenance efforts as typical cloud products, however, certain flexibility such as integration of many tools are traded. This operation guide helps to plug into the logging infrastructure.
 
@@ -18,7 +18,7 @@ Operations such as project space management and log parsing configuration are do
 Sign in with Aliyun Account
 -------------------
 
-You operate SLS projects in the [SLS Portal](http://sls.alibaba-inc.com/) with Aliyun account. If you do not have an Aliyun account yet, please [obtain one](http://www.aliyun.com/).
+You operate SLS projects in the [SLS Admin Console](http://sls.console.aliyun.com/) with Aliyun account. If you do not have an Aliyun account yet, please [obtain one](http://www.aliyun.com/).
 
 * Cannot sign in SLS Portal
 
