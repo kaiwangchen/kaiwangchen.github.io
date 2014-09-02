@@ -32,11 +32,14 @@ You operate SLS projects in the [SLS Admin Console](http://sls.console.aliyun.co
 SLS Project
 -------------------
 
-Having signed in the SLS Portal, the Project List page is displayed. Currently only one SLS project can be created per account. However, more can be requested through the Aliyun ticket system, just hover the pointer over the Create Project button to get the entrance link.
+Having signed in the SLS Portal, the Project List page is displayed. 
+
+Figure 1. Project List
+![Project List](sls-operation-guide/sls-project-list.png)
+
+Currently only one SLS project can be created per account. However, more can be requested through the Aliyun ticket system, just hover the pointer over the Create Project button to get the entrance link.
 
 SLS project is the base unit to enforce bandwidth limit of the logging traffic.
-
-![Project List](sls-operation-guide/sls-project-list.png)
 
 
 Category
@@ -44,10 +47,12 @@ Category
 
 An SLS project may contain many categories, each defining its own log collection and log consumption. Clicking a project in the Project List page switches to Category List page of the chosen project. 
 
+Figure 2. Category List
 ![Category List](sls-operation-guide/sls-category-list.png)
 
 Then a new category can be created. When a new category is created, you define log consumption, then configure logtail, the log collection tool.
 
+Figure 3. Create a Category
 ![Create Category](sls-operation-guide/sls-create-category.png)
 
 Log Collection determines location of log files, how to parse log entries, and which server groups to install ilogtail. Comparatively, [LogStash](http://logstash.net/) is an open source conterpart of ilogtail. However, SLS also accepts log pushed through SLS API, which is not covered in this guide, and ilogtail is automatically installed with configuration fetched from SLS.
@@ -66,8 +71,13 @@ There are three steps to configure logtail:
 
 Since ilogtail use regular expressions to determine boundaries of multiline logs and to capture fields, however, regular expressions are rather weird to many people, SLS povides several online tools to assist the deducing of regular expressions in step 1 and 2. Hand craft ones can be used when auto-gneration is imperfect.
 
+Figure 4. Configure Logtail, step 1
 ![Step 1](sls-operation-guide/sls-configure-logtail-1.png)
+
+Figure 5. Configure Logtail, step 2, with auto-generation tool
 ![Step 2, auto](sls-operation-guide/sls-configure-logtail-2-auto.png)
+
+Figure 6. Configure Logtail, step 2, with hand-craft regular expression
 ![Step 2, craft](sls-operation-guide/sls-configure-logtail-2-craft.png)
 
 A running ilogtail instance consists of two processes, one of which supervises the other.
@@ -91,8 +101,9 @@ ilogtail is installed by the Aliyun CloudShield service, so each server in the d
 
 The final caveat is ilogtail supports only 64-bit Linux, otherwise, error will be reported when creating server group to ilogtail installation.
 
-When a server group is selected and applied ilogtail configurations, the Category Detail page is displayed for real-time searching. Notice that the ilogtail installation takes 1~2 minutes to complete, so be a little patient for the first lines of logs.
+When a server group is selected and applied ilogtail configuration, the Category Detail page is displayed for real-time searching. Notice that the ilogtail installation takes 1~2 minutes to complete, so be a little patient for the first lines of logs.
 
+Figure 7. Real-time Searching
 ![Real-time Searching](sls-operation-guide/sls-category-logs.png)
 
 
