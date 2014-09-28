@@ -1,3 +1,6 @@
+---
+layout: doc
+---
 SLS Operation Guide
 ===================
 

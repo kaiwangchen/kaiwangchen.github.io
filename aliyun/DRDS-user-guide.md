@@ -1,5 +1,8 @@
+---
+layout: doc
+---
 Aliyun DRDS User Guide
-----------------------
+======================
 
 _Notice that this is not an official translation, and the DRDS product is continously evolving. Any doubt please contact me._ 
 

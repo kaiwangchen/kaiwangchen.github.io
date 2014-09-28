@@ -1,3 +1,6 @@
+---
+layout: doc
+---
 Aliyun Simple Log Service (SLS) Tutorial
 ===================
 
