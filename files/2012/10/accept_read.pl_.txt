@@ -1,0 +1,74 @@
+#!/usr/bin/perl -w
+
+# kc20120820 extract php-fpm interval between accept and reading request from strace output
+#   strace -tttt  $(pidof php-fpm |sed 's/\([0-9]*\)/\-p \1/g') >>fpm.strace 2>&1
+
+use strict;
+use constant FPM_MASTER_PID => $ENV{FPM_MASTER_PID} || 0;
+
+use constant {
+   OK => 0,
+   PID => 1,
+   TS => 2,
+   NAME => 3,
+   OTHER => 4,
+};
+
+my %ip;
+my %ts0;
+my %syscalls;
+while (<>) {
+   chomp;
+   next if /^Process/;
+   check_syscall();
+
+   my ($pid, $ts) = /^\[pid\s+(\d+)]\s+([\d.]+)\s+/;
+   next if $pid == FPM_MASTER_PID;
+
+   s/^\[pid\s+\d+]\s+[\d.]+\s+//;
+
+   if (/^(\w+)(.*)\s+<unfinished\s+\.\.\.>$/) {
+      push @{$syscalls{$pid}}, [0, $pid, $ts, $1, $2];
+   }
+   elsif (/^<\.\.\.\s+(\w+)\s+resumed>\s+(.*) = /) {
+      for (@{$syscalls{$pid}}) {
+         if ($_->[NAME] eq $1 && ! $_->[OK]) {
+            $_->[OTHER] .= $2;
+            $_->[OK] = 1;
+            last;
+         }
+      }
+   }
+   else {
+      if (/^(\w+)(.*)/) {
+         push @{$syscalls{$pid}}, [1, $pid, $ts, $1, $2];
+      }
+      else {
+         print STDERR "uknown format $pid $ts $_\n";
+      }
+   }
+}
+check_syscall();
+
+sub check_syscall {
+   for my $pid (keys %syscalls) {
+      while (@{$syscalls{$pid}} && $syscalls{$pid}->[0][OK]) {
+         my $x = shift @{$syscalls{$pid}};
+         if ($x->[NAME] eq 'accept') {
+            if($x->[OTHER] =~ /inet_addr\("([0-9.]+)"\)/) {
+               $ip{$pid} = $1;
+               $ts0{$pid} = $x->[TS];
+            }
+         }
+         if ($x->[NAME] eq 'read') {
+            if ($ip{$pid}) {
+               print join(", ", $ip{$pid}, $x->[TS] - $ts0{$pid}, $pid, $ts0{$pid}),"\n";
+               $ip{$pid} = "";
+            }
+            else {
+               #print STDERR join(' ', 'dangling or further read', @$x),"\n";
+            }
+         }
+      }
+   }
+}

@@ -1,0 +1,19 @@
+---
+layout: post
+title: JVM talk
+author: kc
+tags:
+- Java
+- JVM
+wordpress_id: 411
+wordpress_url: http://kaiwangchen.com/blog/?p=411
+date: 2013-10-28 11:48:23 +0800
+---
+
+Last week I gave a talk about the Java Virtual Machine, and slides are available [here][1]. 
+
+I was trying to cover the connections between real machine and virtual machine, and how high-level programming concepts are mapped to real/virtual machine inputs, and finally virtual machine operation skills. 
+
+Enjoy.
+
+ [1]: http://kaiwangchen.github.io/presentations/jvm-intro.html

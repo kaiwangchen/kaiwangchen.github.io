@@ -1,0 +1,80 @@
+$ curl -v -H "Accept: application/json" https://vagrantcloud.com/hashicorp/precise64
+* About to connect() to vagrantcloud.com port 443 (#0)
+*   Trying 54.86.168.161... connected
+* Connected to vagrantcloud.com (54.86.168.161) port 443 (#0)
+* Initializing NSS with certpath: sql:/etc/pki/nssdb
+*   CAfile: /etc/pki/tls/certs/ca-bundle.crt
+  CApath: none
+* SSL connection using TLS_RSA_WITH_AES_128_CBC_SHA
+* Server certificate:
+*       subject: CN=*.vagrantcloud.com,OU=Domain Control Validated - RapidSSL(R),OU=See www.rapidssl.com/resources/cps (c)14,OU=GT97281799,serialNumber=ELsGwiEpQdd4/DW-FneEn51ofxTQXmm0
+*       start date: Apr 08 05:45:16 2014 GMT
+*       expire date: Feb 16 05:03:12 2015 GMT
+*       common name: *.vagrantcloud.com
+*       issuer: CN=RapidSSL CA,O="GeoTrust, Inc.",C=US
+> GET /hashicorp/precise64 HTTP/1.1
+> User-Agent: curl/7.19.7 (x86_64-redhat-linux-gnu) libcurl/7.19.7 NSS/3.14.0.0 zlib/1.2.3 libidn/1.18 libssh2/1.4.2
+> Host: vagrantcloud.com
+> Accept: application/json
+>
+< HTTP/1.1 200 OK
+< Cache-Control: max-age=0, private, must-revalidate
+< Content-Type: application/json; charset=utf-8
+< Date: Mon, 14 Jul 2014 06:21:01 GMT
+< ETag: "a012b28131d30ba37d617f332eec1d24"
+< Server: Apache/2.2.22 (Ubuntu)
+< Status: 200 OK
+< X-Content-Type-Options: nosniff
+< X-Frame-Options: SAMEORIGIN
+< X-Powered-By: Phusion Passenger 4.0.40
+< X-Request-Id: c62cf55b-0411-460e-8dce-0dfe75930a8b
+< X-Runtime: 0.109855
+< X-UA-Compatible: chrome=1
+< X-XSS-Protection: 1; mode=block
+< Content-Length: 1332
+< Connection: keep-alive
+<
+{
+  "description": "This is a simple 64-bit Ubuntu 12.04 LTS box that has Chef/Puppet pre-installed.",
+  "short_description": "A standard Ubuntu 12.04 LTS 64-bit box.",
+  "name": "hashicorp/precise64",
+  "versions": [
+    {
+      "version": "1.1.0",
+      "status": "active",
+      "description_html": "<p>Added Hyper-V</p>\n",
+      "description_markdown": "Added Hyper-V",
+      "providers": [
+        {
+          "name": "virtualbox",
+          "url": "https://vagrantcloud.com/hashicorp/precise64/version/2/provider/virtualbox.box"
+        },
+        {
+          "name": "hyperv",
+          "url": "https://vagrantcloud.com/hashicorp/precise64/version/2/provider/hyperv.box"
+        },
+        {
+          "name": "vmware_fusion",
+          "url": "https://vagrantcloud.com/hashicorp/precise64/version/2/provider/vmware_fusion.box"
+        }
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "status": "active",
+      "description_html": null,
+      "description_markdown": "",
+      "providers": [
+        {
+          "name": "virtualbox",
+          "url": "https://vagrantcloud.com/hashicorp/precise64/version/1/provider/virtualbox.box"
+        },
+        {
+          "name": "vmware_fusion",
+          "url": "https://vagrantcloud.com/hashicorp/precise64/version/1/provider/vmware_fusion.box"
+        }
+      ]
+    }
+  ]
+* Connection #0 to host vagrantcloud.com left intact
+* Closing connection #0

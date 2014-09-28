@@ -1,0 +1,100 @@
+# make sure static and upload directories are prepared, then
+# plackup limit_upload_size.psgi
+
+use strict;
+use warnings;
+use File::Copy;
+use Digest::MD5 qw(md5_hex);
+use Plack::Builder;
+use Plack::Request;
+use Plack::App::Directory;
+
+my @form = <DATA>;
+my $limit = 2*1024; 
+my $upload = "$ENV{HOME}/code/http_upload";
+my $static = "$ENV{HOME}/code/static";
+builder {
+   mount "/form" => sub { my $i = 0; [ 200, [], [ @form ] ] },
+   mount "/att" => Plack::App::Directory->new( root => $upload ),
+   mount "/static" => Plack::App::Directory->new( root => $static ),
+   mount "/upload" => sub {
+      my $upfile = Plack::Request->new(shift)->uploads()->{"upload_pic_file"};
+      my $json = qq({"code":-1,"message":"file oversized"});
+      if ($upfile->size <= $limit) {
+         eval {
+            my ($suffix) = $upfile->filename =~ /(\.\w+)$/;
+            my $md5 = Digest::MD5->new;
+            $md5->addfile(IO::File->new($upfile->path, "<"));
+            my $file = $md5->hexdigest . ($suffix || ".out");
+            copy($upfile->tempname, "$upload/$file");
+            $json = qq({"code":0,"pic":"$file"});
+         };
+         if ($@) {
+            $json = qq({"code":-1,"message":"internal error"});
+         }
+      }
+      my $jsonp = "<script>window.parent.upload_callback($json);</script>";
+      [ 200, [ 'Content-Type' => 'text/html' ], [ $jsonp ] ]
+   }
+}
+
+__DATA__
+<!DOCTYPE html>
+<html>
+<head>
+<title>Fake AJAX upload</title>
+<!-- http://jqueryui.com -->
+<script src="/static/js/jquery-1.8.2.min.js"></script>
+<script src="/static/js/jquery-ui-1.8.24.custom.min.js"></script>
+<link rel="stylesheet" href="/static/css/ui-lightness/jquery-ui-1.8.24.custom.css" type="text/css" media="all" />
+<script>
+function upload_pic() {
+  $("#upload-form").submit();
+  $("#loading-img").show();
+}
+function upload_callback(res) {
+  if(res.code == 0 && res.pic) {
+     var uploadPath = "/att/";
+     $("#imgDisplay img").attr("src", uploadPath+res.pic).load(function(){
+       var x = $(this).width();
+       var y = $(this).height();
+       var r = x/y;
+       if (x < 120 && y < 320)
+         ;
+       else if (r < 2.7)
+         $(this).css({height:"120px"});
+       else
+         $(this).css({width:"320px"});
+     });
+     $("#imgDisplay").fadeIn(300);
+     $("#upload-form").hide();
+  }
+  else if (res.message) {
+    $("#dialog").html(res.message).dialog();
+    setTimeout(function(){
+      $("#dialog").dialog('close');
+    }, 1500);
+    $("#upload-form").show();
+    $("#loading-img").hide();
+  }
+  else {
+     alert('unexpected failure');
+  }
+}
+</script>
+</head>
+<body>
+  <span class="block_image_upload">Image</span>
+  <form id="upload-form" target="upload_iframe" action="/upload" enctype="multipart/form-data" method="POST">
+    <div id="pic-field">
+      <input type="file" name="upload_pic_file" onchange="upload_pic()" id="upload_pic_file" size="1"/>
+    </div>
+    <div id="loading-img" style="display:none">uploading</div>
+  </form>
+  <iframe name="upload_iframe" style="display:none"></iframe>
+  <div id="imgDisplay" style="display:none">
+    <div><img src="#"/></div>
+  </div>
+  <div id="dialog" title="Error"></div>
+</body>
+</html>

@@ -1,0 +1,54 @@
+#!/usr/bin/perl -w
+use strict;
+use DBI;
+
+# $dbh->do(sql_n($dbh,$t,\@kcols,\@vcols,$n),undef,@data);
+sub sql_n {
+   my ($dbh, $table, $kcols, $vcols, $n) = @_;
+   'insert into '. $dbh->quote_identifier($table) .'('
+   . join(',', map {$dbh->quote_identifier($_)} @{$kcols}, @{$vcols})
+   . ') values '
+   . join(',', ('('. join(',', map {'?'} @{$kcols}, @{$vcols}) .')') x $n)
+   . (@{$kcols} > 0 && ' on duplicate key update '. join(',',
+        map {"$_=values($_)"} map {$dbh->quote_identifier($_)} @{$vcols}))
+}
+
+# create table t(id int, a char(2), b char(2), c char(2), primary key(id));
+my $update = 1;
+my $verbose = 2;
+my $tm = time;
+my $dbh = DBI->connect("dbi:mysql:database=test;mysql_read_default_file=~/sandboxes/msb_5_1_46/my.sandbox.cnf;mysql_read_default_group=client");
+my $table = 't';
+my @keycols = qw(id);
+my @valcols = qw(a b c);
+my @data = ([qw(1 a a a)],[qw(2 b b b)]);
+
+my $batch_size = 3000; # lower this size if packet size limit is hit
+my $n = 0;
+my @x = ();
+my $left = 0;
+my $i = 1;
+my $batch;
+while (my $row = pop @data) {
+   push @x, @{$row};
+   $left++;
+   if ($i++ % $batch_size == 0) {
+      $n++;
+      $batch ||= do {
+         my $sql = sql_n($dbh, $table, \@keycols, \@valcols, $batch_size);
+         print "$sql\n" if $verbose > 1;
+         $dbh->prepare($sql);
+      };
+      $batch->execute(@x) if $update;
+      print join(",", @x),"\n" if $verbose > 1;
+      @x = ();
+      $left = 0;
+   }
+}
+if ($left) {
+   my $sql = sql_n($dbh, $table, \@keycols, \@valcols, $left);
+   print "$sql\n" if $verbose > 1;
+   $dbh->do($sql, undef, @x) if $update;
+   print join(",", @x),"\n" if $verbose > 1;
+}
+print "processed $n batches in size $batch_size, ", ($left ? "with leftover sized $left" : "without leftover")," in ", (time-$tm), " seconds\n" if $verbose;

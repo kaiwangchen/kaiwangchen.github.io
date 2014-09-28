@@ -1,0 +1,10 @@
+# Site settings
+title: Kaiwang Chen
+url: "http://kaiwangchen.com"
+baseurl: ""
+fileurl: "/files"
+github_username: kaiwangchen
+gmail_username: kaiwang.chen
+
+# Build settings
+markdown: kramdown
