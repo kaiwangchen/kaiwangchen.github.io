@@ -45,7 +45,7 @@ configure.ac 中最常用的宏要数 AC_CHECK_HEADERS, AC_CHECK_FUNCS 和 AC_CH
 
 为了规避这个问题，可以在软件包中创建一个 m4 子目录，放入所有用到的 m4 宏库。然后就可以使用 `aclocal -I m4` 来在系统宏库之前搜索该目录。这个目录可以加入版本控制，或者仅加入到发布包中。后者是最小需求，它减少了版本控制代码的量，而且自动采用最新的 m4 宏库版本，但代价是检出代码编译时可能无法进行 autoconf ，而只能从发布包中另行提取（未必可行，因为 configure.ac 可能加入了新的宏，或者项目新增了依赖）。另一方面，将 m4 目录加入版本控制，有时会诱使开发者修改这些宏定义。咋一看这似乎是合理的，毕竟这些 m4 已经在版本控制中，但软件包的维护人员会紧张，因为有时新版本的 m4 宏库会修复一些缺陷，增加新选项或修改安装路径，若 m4 宏库中的定义修改了，就无法直接替换为新版本了。这也意味着，当更新 m4 宏库时，需要重新打那些补丁。
 
-m4 宏库总是很烦人的。不同的宏库之间通常有不少重复代码（得看 CFLAGS 和 LDFLAGS 的方式: 检测，或者采用 `-config` 脚本）。为了解决这个问题， GNOME 和 FreeDesktop 项目开发了一个叫做 pkg-config 的工具，它提供了一个可执行文件和一个 m4 宏库，支持检测给定程序库或者软件包是否存在，其依据是它们安装的 `.pc` 数据文件。这个方法简化了 configure.ac 的编写，也大大减少了 configure 脚本执行时间，因为它使用被检测包安装的 `.pc` 数据文件，而不是生成小程序进行链接测试。另一方面，这个方法也意味着，开发人员若写错了 `.pc` 文件，用户程序可就无法运行了，毕竟编译选项和链接选项都在 `.pc` 文件中给出了，configure 脚本不再检测该程序库本身。幸运的是，这种情况并不常见。
+m4 宏库总是很烦人的。不同的宏库之间通常有不少重复代码（得看 CFLAGS 和 LDFLAGS 的方式: 检测，或者采用 `-config` 脚本）。为了解决这个问题， GNOME 和 FreeDesktop 项目开发了一个叫做 [pkg-config][pkg-config] 的工具，它提供了一个可执行文件和一个 m4 宏库，支持检测给定程序库或者软件包是否存在，其依据是它们安装的 `.pc` 数据文件。这个方法简化了 configure.ac 的编写，也大大减少了 configure 脚本执行时间，因为它使用被检测包安装的 `.pc` 数据文件，而不是生成小程序进行链接测试。另一方面，这个方法也意味着，开发人员若写错了 `.pc` 文件，用户程序可就无法运行了，毕竟编译选项和链接选项都在 `.pc` 文件中给出了，configure 脚本不再检测该程序库本身。幸运的是，这种情况并不常见。
 
 新办法是在 configure.ac 中使用 pkg.m4 宏库提供的 PKG_CHECK_MODULES 函数。该宏库应加入到 m4 目录中。由于 pkg-config 是必需的（因为 configure 脚本是通过该命令来解析 `.pc` 文件），那就无法保证开发人员和构建人员各自环境中的 pkg.m4 是相同的，也无法保证后者环境中的宏库没有缺陷，因为它可能是更老的版本呢。
 
@@ -91,5 +91,6 @@ Autotools 的学习曲线比较陡，不过随着在日常工作中的使用，�
 [uniform]: http://www.gnu.org/software/automake/manual/html_node/Uniform.html
 [canonicalization]: http://www.gnu.org/software/automake/manual/html_node/Canonicalization.html
 [user-variables]: http://www.gnu.org/software/automake/manual/html_node/User-Variables.html
+[pkg-config]: http://www.freedesktop.org/wiki/Software/pkg-config/
 [conditionals]: http://www.gnu.org/software/automake/manual/html_node/Usage-of-Conditionals.html
 [package-options]: https://www.gnu.org/savannah-checkouts/gnu/autoconf/manual/autoconf-2.69/html_node/Package-Options.html#Package-Options
