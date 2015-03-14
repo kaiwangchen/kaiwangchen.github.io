@@ -29,22 +29,25 @@ layout: doc
 
 * 步骤 1 发的邮件提供 **公司名称** 和 open.taobao.com 的 **开发者账号** 。
 
-    邮件标题：游戏开发者账号标记申请
-    邮件内容：
-        开发者账号：<淘宝昵称>
-        公司名称：<公司名称>
+```
+邮件标题：游戏开发者账号标记申请
+邮件内容：
+    开发者账号：<淘宝昵称>
+    公司名称：<公司名称>
+```
 
 * 步骤 2 发的邮件提供 **应用名称** 、 **App Key** 和 **企业支付宝登陆账号** 和 **企业支付宝账号ID** (那串数字一般是 2088 打头的) 。
 
-    邮件标题：游戏应用宝点密钥申请
-    邮件内容：
-        开发者账号：<淘宝昵称>
-        公司名称：<公司名称>
-        应用名称：<游戏名称>
-        App Key：<在 open.taobao.com 中创建的带“无线手机游戏”标签的应用的 App Key>
-        企业支付宝账号：<分账用的企业支付宝账号登录名>
-        企业支付宝账号ID：<上面这个账号的 2088 打头的数字 ID >
-
+```
+邮件标题：游戏应用宝点密钥申请
+邮件内容：
+    开发者账号：<淘宝昵称>
+    公司名称：<公司名称>
+    应用名称：<游戏名称>
+    App Key：<在 open.taobao.com 中创建的带“无线手机游戏”标签的应用的 App Key>
+    企业支付宝账号：<分账用的企业支付宝账号登录名>
+    企业支付宝账号ID：<上面这个账号的 2088 打头的数字 ID >
+```
 
 注意事项
 --------
@@ -63,30 +66,32 @@ tvdev.yunos.com 的开发者，请新注册 open.taobao.com 账号。
 附：启动逻辑可参考以下伪代码
 ----------------------------
 
-    if (MagicCenter.isSupportAuthorize(ctx)) {
-        if (McUser.isAuth()) { // 1. 会触发网络调用，注意不要阻塞主 UI 
-            // with-account mode
-        } else {
-            // prompt: loginAndAuth or guest mode
-            if (loginAndAuth) {
-                McUser.loginAuth(0); // 2. 会触发网络调用，注意不要阻塞主 UI 。
-                                     // 此处先登陆后授权，放弃登陆则返回游戏，放弃授权则回调 AuthListener.onError -2205 。
-            }
-            else {
-                // guest mode
-            }
-        }
-        
+```
+if (MagicCenter.isSupportAuthorize(ctx)) {
+    if (McUser.isAuth()) { // 1. 会触发网络调用，注意不要阻塞主 UI 
+        // with-account mode
     } else {
-        // prompt: update tip or guest mode
+        // prompt: loginAndAuth or guest mode
+        if (loginAndAuth) {
+            McUser.loginAuth(0); // 2. 会触发网络调用，注意不要阻塞主 UI 。
+                                 // 此处先登陆后授权，放弃登陆则返回游戏，放弃授权则回调 AuthListener.onError -2205 。
+        }
+        else {
+            // guest mode
+        }
     }
     
-    if (with-account mode) {
-    }
-    else if (guest mode) {
-    }
-    else if (update tip) { 
-    }
-    else {
-        // quit
-    }
+} else {
+    // prompt: update tip or guest mode
+}
+
+if (with-account mode) {
+}
+else if (guest mode) {
+}
+else if (update tip) { 
+}
+else {
+    // quit
+}
+```
