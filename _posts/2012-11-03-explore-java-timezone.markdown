@@ -10,7 +10,7 @@ wordpress_url: http://kaiwangchen.com/?p=200
 date: 2012-11-03 16:01:04 +0800
 ---
 
-I previously wrote about the [off-by-one-hour][1] problem that obsolete timezone databases could cause false conversion to local time, and warned that certain programs might assume `/etc/localtime` being copied or symlinked from tzdata files in `/usr/share/zoneinfo`. This followup post demonstrates such an assumption and explores how Java applications decide their timezones, which was filed as a [bug][2] though. <!--more-->
+I previously wrote about the [off-by-one-hour][1] problem that oudated timezone data files could cause false conversion to local time, and warned that certain programs might assume `/etc/localtime` being copied or symlinked from tzdata files in `/usr/share/zoneinfo`. This followup post demonstrates such an assumption and explores how Java applications decide their timezones, which was filed as a [bug][2] though. <!--more-->
 
 Due to limited network access and too much old operating system, we applied a quick fix of by replacing obsolete only `/etc/localtime` with one from an up-to-date operating system. Then `date(1)` worked as expected, however, some guy reported that his Java program was logging in GMT time when restarted *across* the quick fix. Although it is a complex application, the defect could be reproduced by several lines of code. I would call this a good example of *precise and reliable reproduction* of defects, and the bad habbit of complaining in a complex context should be avoided completely. 
 
