@@ -38,7 +38,7 @@ The short description is:
 
 So we can reason that Java timezone works if `/etc/timezone` is correct, or `/etc/localtime` is symlinked to or copied from proper zoneinfo file. Anyway, make sure the JRE shipped timezone data files are up to date.
 
-The complete detail lies in the OS specific implementation from `java.base/unix/native/libjava/TimeZone_md.c`.
+The complete detail lies in the OS specific implementation, namely `java.base/unix/native/libjava/TimeZone_md.c`.
 
 You can find the Java source code in the [openjdk source repository][3]. Here is a snippet for quick access, which is also a good example of comment:
 
