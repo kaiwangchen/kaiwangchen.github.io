@@ -5,6 +5,7 @@ baseurl: ""
 fileurl: "/files"
 github_username: kaiwangchen
 gmail_username: kaiwang.chen
+remote_theme: sighingnow/jekyll-gitbook
 
 # Build settings
 markdown: redcarpet2
